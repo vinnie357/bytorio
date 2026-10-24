@@ -8,6 +8,9 @@ import { once } from "node:events";
 import { bundleLuau } from "./sdk/bundle.mjs";
 import { syncEditor } from "./sdk/project.mjs";
 import { branding } from "./branding.mjs";
+
+// Check failures name the analyzer executable, which carries .exe only on Windows.
+const analyzer = process.platform === "win32" ? "luau-analyze.exe" : "luau-analyze";
 const root = resolve("build/sdk-cli-verification", randomUUID());
 await mkdir(root, { recursive: true });
 const project = resolve(root, "game");
@@ -134,7 +137,7 @@ try {
   const changed = await (await fetch(url)).text();
   assert.notEqual(changed, bundled, "watch rebuilds a required module");
   await writeFile(main, original.replace("local game:", 'byt.button("jump")\nlocal game:'));
-  await waitFor("luau-analyze.exe failed");
+  await waitFor(`${analyzer} failed`);
   assert.equal(
     await (await fetch(url)).text(),
     changed,
