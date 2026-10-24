@@ -202,8 +202,10 @@ async function prepare(path) {
   }
   return { ...spec, generated };
 }
+// The native player targets Windows x64; other hosts build only the browser export.
+const nativeExport = process.platform === "win32";
 async function player() {
-  task("build:odin");
+  task(nativeExport ? "build:odin" : "deps:player:web");
 }
 async function executor() {
   task("deps:luau");
@@ -316,7 +318,7 @@ export async function buildProject(path, options = {}) {
   ).instance.exports;
   decodeCartridge(runtime, png);
   await writeFile(resolve(spec.project, "build/game.png"), png);
-  for (const platform of ["web", "native"]) {
+  for (const platform of nativeExport ? ["web", "native"] : ["web"]) {
     const target = resolve(spec.project, "build", platform),
       base = resolve(repo, "build/odin-player", platform);
     await mkdir(resolve(target, "licenses"), { recursive: true });
