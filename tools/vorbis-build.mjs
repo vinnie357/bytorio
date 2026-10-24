@@ -5,6 +5,9 @@ import { createHash } from "node:crypto";
 import { repo, run, tool } from "./toolchain.mjs";
 import { resourceSchema as limits } from "../runtime/odin/web/constants.js";
 
+// Only Visual Studio generators take a platform (-A) and an MSVC runtime.
+const msvcFlags =
+  process.platform === "win32" ? ["-A", "x64", "-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded"] : [];
 const root = resolve(repo, "build/vorbis");
 const prefix = resolve(root, "install");
 await mkdir(root, { recursive: true });
@@ -40,11 +43,9 @@ for (const [name, version, hash] of [
     source,
     "-B",
     build,
-    "-A",
-    "x64",
+    ...msvcFlags,
     "-DCMAKE_POLICY_VERSION_MINIMUM=3.5",
     "-DCMAKE_POLICY_DEFAULT_CMP0091=NEW",
-    "-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded",
     `-DCMAKE_INSTALL_PREFIX=${prefix}`,
     `-DCMAKE_PREFIX_PATH=${prefix}`,
     "-DBUILD_TESTING=OFF",
@@ -67,10 +68,8 @@ run(tool("cmake"), [
   bridge,
   "-B",
   resolve(root, "native"),
-  "-A",
-  "x64",
+  ...msvcFlags,
   `-DCMAKE_PREFIX_PATH=${prefix}`,
-  "-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded",
 ]);
 run(tool("cmake"), ["--build", resolve(root, "native"), "--config", "Release", "--parallel", "4"]);
 const sources = [
