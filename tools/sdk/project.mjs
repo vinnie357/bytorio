@@ -203,7 +203,7 @@ async function prepare(path) {
   return { ...spec, generated };
 }
 // The native player targets Windows x64; other hosts build only the browser export.
-const nativeExport = process.platform === "win32";
+export const nativeExport = process.platform === "win32";
 async function player() {
   task(nativeExport ? "build:odin" : "deps:player:web");
 }
