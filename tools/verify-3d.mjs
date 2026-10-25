@@ -1,3 +1,4 @@
+import { nativePlayer } from "./toolchain.mjs";
 import assert from "node:assert/strict";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve, relative } from "node:path";
@@ -99,7 +100,7 @@ function summary(measured) {
 try {
   browser = await chromium.launch({ channel: process.env.PLAYER_BROWSER_CHANNEL || undefined });
   for (const { language, project } of projects) {
-    const executable = resolve(project, "build/native/player.exe");
+    const executable = resolve(project, "build/native", nativePlayer);
     const native = (args) => JSON.parse(run(executable, args));
     const base = "/" + relative(process.cwd(), resolve(project, "build/web")).replaceAll("\\", "/");
     const page = await browser.newPage({ viewport: { width: 960, height: 650 } });

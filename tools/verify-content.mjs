@@ -1,3 +1,4 @@
+import { nativePlayer } from "./toolchain.mjs";
 import assert from "node:assert/strict";
 import { readFile, writeFile, mkdir, copyFile } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -33,7 +34,7 @@ assert.equal(PNG_LIMIT, 2 * 1024 * 1024);
 assert.equal(MAX_GAME_BYTES, 1024 * 1024);
 assert.equal(MAX_CONTENT_READ_BYTES, 1024 * 1024);
 function native(project, path, expected = 0) {
-  const result = spawnSync(resolve(project, "build/native/player.exe"), [path, "--smoke"], {
+  const result = spawnSync(resolve(project, "build/native", nativePlayer), [path, "--smoke"], {
     encoding: "utf8",
     timeout: 30000,
     env: {

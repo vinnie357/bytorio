@@ -8,7 +8,7 @@ import { once } from "node:events";
 import { chromium } from "./browser-timing.mjs";
 import { createProject, buildProject } from "./sdk/project.mjs";
 import { serve } from "./serve.mjs";
-import { tool, dependencyRoot, task } from "./toolchain.mjs";
+import { tool, task, copyWasmtimeLibrary, nativePlayer } from "./toolchain.mjs";
 import {
   configureResources,
   submitResources,
@@ -29,11 +29,10 @@ function run(exe, args) {
 }
 run(process.execPath, ["tools/generate-constants.mjs", "--check"]);
 const odin = tool("odin");
-const dependency = dependencyRoot();
 run(odin, ["test", "tests/resources", "-o:none", `-out:${resolve(root, "registry-tests.exe")}`]);
 task("deps:trace:resources");
 await copyFile("build/validation-tools/resources/trace.exe", resolve(root, "trace.exe"));
-await copyFile(resolve(dependency, "wasmtime.dll"), resolve(root, "wasmtime.dll"));
+await copyWasmtimeLibrary(root);
 const projects = {};
 let reference;
 function validateInitialPacket(game, runtime) {
@@ -233,7 +232,7 @@ for (const language of ["odin", "luau"]) {
     `${language} native SDK errors terminate before publishing`,
   );
   const standalone = JSON.parse(
-    run(resolve(project, "build/native/player.exe"), [
+    run(resolve(project, "build/native", nativePlayer), [
       "--check",
       "--game",
       wasm,

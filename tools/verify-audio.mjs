@@ -6,7 +6,7 @@ import { timedSpawnSync as spawnSync } from "./command-timing.mjs";
 import { once } from "node:events";
 import { chromium } from "./browser-timing.mjs";
 import { createProject, buildProject } from "./sdk/project.mjs";
-import { dependencyRoot, toolRoot, task } from "./toolchain.mjs";
+import { task, copySdlLibrary, copyWasmtimeLibrary, nativePlayer } from "./toolchain.mjs";
 import { odinUnitTests } from "./odin-unit-tests.mjs";
 import { serve } from "./serve.mjs";
 import { resourceSchema as limits } from "../runtime/odin/web/constants.js";
@@ -37,11 +37,10 @@ function run(exe, args, env = {}, diagnostics = false) {
   assert.equal(result.status, 0, result.stdout + result.stderr || String(result.error));
   return result.stdout + (diagnostics ? result.stderr : "");
 }
-const deps = dependencyRoot();
 task("deps:trace:audio");
 await copyFile("build/validation-tools/audio/trace.exe", resolve(root, "trace.exe"));
-await copyFile(resolve(deps, "wasmtime.dll"), resolve(root, "wasmtime.dll"));
-await copyFile(resolve(toolRoot("odin"), "vendor/sdl3/SDL3.dll"), resolve(root, "SDL3.dll"));
+await copyWasmtimeLibrary(root);
+await copySdlLibrary(root);
 const report = {
   synthesis,
   stress,
@@ -73,7 +72,7 @@ for (const language of ["odin", "luau"]) {
   await buildProject(project);
   projects[language] = project;
   const player = JSON.parse(
-    run(resolve(project, "build/native/player.exe"), ["--smoke"], {
+    run(resolve(project, "build/native", nativePlayer), ["--smoke"], {
       SDL_VIDEODRIVER: "dummy",
       SDL_AUDIODRIVER: "dummy",
       SDL_RENDER_DRIVER: "software",

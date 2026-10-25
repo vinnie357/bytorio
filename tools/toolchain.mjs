@@ -1,3 +1,4 @@
+import { copyFile } from "node:fs/promises";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { timedSpawnSync as spawnSync } from "./command-timing.mjs";
@@ -49,8 +50,26 @@ export const sdlLibrary = () =>
   windowsHost
     ? resolve(toolRoot("odin"), "vendor/sdl3/SDL3.dll")
     : resolve(sdlBuildRoot, "install/lib", sdlLibraryName);
-// Extra Odin linker flags that find the SDL3 build and load it from beside the executable.
-export const nativeLinkerFlags = () =>
-  windowsHost
-    ? []
-    : [`-extra-linker-flags:-L${resolve(sdlBuildRoot, "install/lib")} -Wl,-rpath,@executable_path`];
+// Extra Odin linker flags that find the SDL3 build and load it from beside the executable. A
+// test harness also records the build directory as a second rpath so it runs from any scratch
+// folder; shipped players must not embed that machine path.
+export const nativeLinkerFlags = ({ harness = false } = {}) => {
+  if (windowsHost) {
+    return [];
+  }
+  const library = resolve(sdlBuildRoot, "install/lib");
+  const rpaths = ["@executable_path", ...(harness ? [library] : [])];
+  const flags = rpaths.map((path) => `-Wl,-rpath,${path}`).join(" ");
+  return [`-extra-linker-flags:-L${library} ${flags}`];
+};
+
+// Verifiers run harness executables from a scratch directory; these place the libraries they load
+// beside them. Wasmtime is linked statically off Windows, so only Windows needs it copied.
+export async function copySdlLibrary(directory) {
+  await copyFile(sdlLibrary(), resolve(directory, sdlLibraryName));
+}
+export async function copyWasmtimeLibrary(directory) {
+  if (windowsHost) {
+    await copyFile(resolve(dependencyRoot(), "wasmtime.dll"), resolve(directory, "wasmtime.dll"));
+  }
+}

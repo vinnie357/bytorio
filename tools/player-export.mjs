@@ -137,7 +137,7 @@ async function adHocSign(target) {
     return;
   }
   for (const name of [nativePlayer, sdlLibraryName]) {
-    execFileSync("codesign", ["--force", "--sign", "-", resolve(target, name)]);
+    execFileSync("codesign", ["--force", "--sign", "-", resolve(target, name)], { stdio: "pipe" });
   }
 }
 

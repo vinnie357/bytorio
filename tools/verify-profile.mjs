@@ -1,3 +1,4 @@
+import { nativePlayer } from "./toolchain.mjs";
 import assert from "node:assert/strict";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { resolve, relative } from "node:path";
@@ -84,7 +85,7 @@ const env = {
   SDL_RENDER_DRIVER: "software",
 };
 function native(project, args, status = 0) {
-  const result = spawnSync(resolve(project, "build/native/player.exe"), args, {
+  const result = spawnSync(resolve(project, "build/native", nativePlayer), args, {
     env,
     encoding: "utf8",
     timeout: 30000,
@@ -324,7 +325,7 @@ try {
     const nativeLoose = JSON.parse(native(project, [...loose, "--smoke"]).stdout);
     assert.equal(nativePng.hash, nativeLoose.hash);
     if (demo === "synthesis") {
-      const unavailable = spawnSync(resolve(project, "build/native/player.exe"), ["--smoke"], {
+      const unavailable = spawnSync(resolve(project, "build/native", nativePlayer), ["--smoke"], {
         env: { ...env, SDL_AUDIODRIVER: "unavailable-profile-test" },
         encoding: "utf8",
         timeout: 30000,

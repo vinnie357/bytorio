@@ -1,6 +1,6 @@
 import { mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
-import { dependencyRoot, repo, run, tool } from "./toolchain.mjs";
+import { dependencyRoot, nativeLinkerFlags, repo, run, tool } from "./toolchain.mjs";
 
 const kind = process.argv[2];
 if (!["resources", "graphics", "audio"].includes(kind)) {
@@ -16,6 +16,7 @@ run(
     "-o:speed",
     `-collection:deps=${dependencyRoot()}`,
     `-out:${resolve(output, "trace.exe")}`,
+    ...nativeLinkerFlags({ harness: true }),
   ],
   { stdio: "inherit" },
 );
