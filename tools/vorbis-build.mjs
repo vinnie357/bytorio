@@ -5,7 +5,8 @@ import { createHash } from "node:crypto";
 import { repo, run, tool } from "./toolchain.mjs";
 import { resourceSchema as limits } from "../runtime/odin/web/constants.js";
 
-// Only Visual Studio generators take a platform (-A) and an MSVC runtime.
+// The Windows host is assumed to use a Visual Studio generator, which takes a platform (-A) and an
+// MSVC runtime. A Windows build with CMAKE_GENERATOR=Ninja would still get these flags.
 const msvcFlags =
   process.platform === "win32" ? ["-A", "x64", "-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded"] : [];
 const root = resolve(repo, "build/vorbis");
