@@ -202,8 +202,18 @@ async function prepare(path) {
   }
   return { ...spec, generated };
 }
-// The native player targets Windows x64; other hosts build only the browser export.
+// The native player targets Windows x64; other verified hosts build only the browser export.
 export const nativeExport = process.platform === "win32";
+// Hosts where the browser-only build has been run and checked. Others fail rather than guess.
+const browserOnlyHosts = ["darwin"];
+function requireVerifiedHost() {
+  if (!nativeExport && !browserOnlyHosts.includes(process.platform)) {
+    throw new Error(
+      `Host ${process.platform} is unverified: builds are supported on win32 (native and web) and ` +
+        `${browserOnlyHosts.join(", ")} (web only)`,
+    );
+  }
+}
 async function player() {
   task(nativeExport ? "build:odin" : "deps:player:web");
 }
@@ -294,6 +304,7 @@ async function smoke(spec) {
   });
 }
 export async function checkProject(path) {
+  requireVerifiedHost();
   const spec = await prepare(path);
   await player();
   if (spec.language === "luau") {
