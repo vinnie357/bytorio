@@ -60,7 +60,7 @@ description = "Build standalone native/browser players and fixtures"
 depends = ["deps:vorbis", "deps:vorbis:native", "deps:sdl3:native"]
 # Skip the nested graph on unchanged builds; tests verify this aggregate contract.
 outputs = [
-  "build/odin-player/native/{% if os() == 'windows' %}SDL3.dll{% else %}libSDL3.0.dylib{% endif %}",
+  "build/odin-player/native/{% if os() == 'windows' %}SDL3.dll{% elif os() == 'macos' %}libSDL3.0.dylib{% else %}libSDL3.so.0{% endif %}",
   "build/odin-player/native/game.wasm",
   "build/odin-player/native/licenses/glad.txt",
   "build/odin-player/native/licenses/odin.txt",
@@ -366,3 +366,16 @@ run = "node tools/capture-site.mjs"
 [tasks."test:site"]
 description = "Check website links, search, responsive layout and playable touch controls"
 run = ["node tools/build-site.mjs --staged", "node tools/verify-site.mjs"]
+
+[tasks."container:linux"]
+description = "Run a command in the pinned x86_64 Linux container: mise run container:linux -- <command>"
+sources = ["tools/linux-container.mjs", "tools/linux/Dockerfile"]
+run = "node tools/linux-container.mjs run"
+
+[tasks."container:linux:build"]
+description = "Build the pinned x86_64 Linux image"
+run = "node tools/linux-container.mjs build"
+
+[tasks."container:linux:stop"]
+description = "Stop and remove the Linux container (tool installs and /work go with it)"
+run = "node tools/linux-container.mjs stop"
