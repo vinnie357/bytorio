@@ -1,6 +1,7 @@
 package main
 
 import abi "../abi"
+import "core:math/bits"
 import "core:testing"
 import sdl "vendor:sdl3"
 
@@ -31,8 +32,10 @@ native_gamepad_mapping :: proc(t: ^testing.T) {
     defer sdl.CloseGamepad(pad)
     joystick := sdl.GetGamepadJoystick(pad)
 
-    press :: proc(joystick: ^sdl.Joystick, button: sdl.GamepadButton, down: bool) {
-        sdl.SetJoystickVirtualButton(joystick, i32(button), down)
+    // A virtual gamepad numbers its joystick buttons by rank among the masked bits.
+    press :: proc(joystick: ^sdl.Joystick, button: sdl.GamepadButton, down: bool, declared: u32) {
+        index := bits.count_ones(declared & (1 << u32(button) - 1))
+        sdl.SetJoystickVirtualButton(joystick, i32(index), down)
         sdl.UpdateJoysticks()
     }
     tilt :: proc(joystick: ^sdl.Joystick, x, y: i16) {
@@ -56,9 +59,9 @@ native_gamepad_mapping :: proc(t: ^testing.T) {
             {.DPAD_UP, 4 | abi.BUTTON_MOVE_UP},
             {.DPAD_DOWN, 8 | abi.BUTTON_MOVE_DOWN},
         }) {
-        press(joystick, entry.button, true)
+        press(joystick, entry.button, true, buttons)
         testing.expect_value(t, gamepad_buttons(pad), entry.mask)
-        press(joystick, entry.button, false)
+        press(joystick, entry.button, false, buttons)
         testing.expect_value(t, gamepad_buttons(pad), 0)
     }
 

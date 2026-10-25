@@ -85,6 +85,7 @@ outputs = [
   "build/odin-player/web/save.js",
   "build/odin-player/web/text-session.js",
   "build/odin-player/web/text-input.js",
+  "build/odin-player/web/gamepad.js",
   "build/odin-player/web/constants.js",
   "build/odin-player/web/executor-cache-core.js",
   "build/odin-player/web/executor-cache.js",

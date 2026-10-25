@@ -4,6 +4,7 @@ import { prepareExecutor } from "./executor-cache.js";
 import { normalizeGraphics } from "./gpu.js";
 import * as controls from "./constants.js";
 import { FrameClock, parseFrameRate } from "./frame-clock.js";
+import { gamepadButtons } from "./gamepad.js";
 import { createTextInputOverlay } from "./text-input.js";
 const canvas = document.getElementById("canvas");
 const display = canvas.getContext("2d", { alpha: false });
@@ -683,26 +684,7 @@ function input(consumeWheel = true) {
   if (keys.has("Space")) {
     buttons |= 16;
   }
-  const pad = [...(navigator.getGamepads?.() || [])].find(
-    (pad) => pad?.connected && pad.mapping === "standard",
-  );
-  if (pad) {
-    if (pad.buttons[14]?.pressed) {
-      buttons |= 1 | controls.BUTTON_MOVE_LEFT;
-    }
-    if (pad.buttons[15]?.pressed) {
-      buttons |= 2 | controls.BUTTON_MOVE_RIGHT;
-    }
-    if (pad.buttons[12]?.pressed) {
-      buttons |= 4 | controls.BUTTON_MOVE_UP;
-    }
-    if (pad.buttons[13]?.pressed) {
-      buttons |= 8 | controls.BUTTON_MOVE_DOWN;
-    }
-    if (pad.buttons[0]?.pressed) {
-      buttons |= 16;
-    }
-  }
+  buttons |= gamepadButtons();
   const hover =
     pointer.hover &&
     pointer.x >= 0 &&
