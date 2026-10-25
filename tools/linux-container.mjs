@@ -71,7 +71,10 @@ function inContainer(command) {
     "mkdir -p /work",
     "rsync -a --delete --exclude=/build --exclude=/node_modules --exclude=/.git /src/ /work/",
     "cd /work",
+    // The validation runner fingerprints sources through git, so give /work a throwaway history.
     "git init -q 2>/dev/null || true",
+    "git add -A",
+    "git -c user.name=container -c user.email=container@localhost commit -q --allow-empty -m snapshot || true",
     "mise trust -q /work",
     // Tool shims put node, odin and the rest on PATH for plain commands.
     'export PATH="$HOME/.local/share/mise/shims:$PATH"',
