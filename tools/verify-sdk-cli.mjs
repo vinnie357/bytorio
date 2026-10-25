@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile, writeFile, mkdir, unlink } from "node:fs/promises";
+import { access, readFile, writeFile, mkdir, unlink } from "node:fs/promises";
 import { resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
@@ -77,6 +77,13 @@ const withModule = original
   .replace(JSON.stringify(branding.starterMessage), "message");
 await writeFile(main, withModule);
 cli(["build", project]);
+if (process.platform !== "win32") {
+  // Off Windows only the browser export exists, and --native fails before building or spawning.
+  await assert.rejects(access(resolve(project, "build/native")), { code: "ENOENT" });
+  assert.match(cli(["run", project, "--native"], 1).stderr, /Windows x64/);
+  assert.match(cli(["watch", project, "--native"], 1).stderr, /Windows x64/);
+  cli(["build", project, "--native"]);
+}
 const bundled = await readFile(resolve(project, "build/web/game.luau"), "utf8");
 assert.ok(
   bundled.includes('[=[require("also-not-an-import")]=]'),
