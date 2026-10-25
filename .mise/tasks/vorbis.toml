@@ -1,7 +1,14 @@
 ["deps:vorbis"]
 sources = ["runtime/vorbis/**", "tools/vorbis-build.mjs", ".mise/toolchain.toml"]
-outputs = ["build/vorbis/vorbis.js", "build/vorbis/vorbis.wasm", "build/vorbis/native/Release/bytorio-vorbis.lib"]
+outputs = ["build/vorbis/vorbis.js", "build/vorbis/vorbis.wasm"]
 run = "node tools/vorbis-build.mjs"
+
+# The Windows native player links this bridge; no other host builds or needs it.
+["deps:vorbis:native"]
+depends = ["deps:vorbis"]
+sources = ["runtime/vorbis/**", "tools/vorbis-build.mjs", ".mise/toolchain.toml"]
+outputs = ["build/vorbis/native/Release/bytorio-vorbis.lib"]
+run = "node tools/vorbis-build.mjs --bridge"
 
 ["test:ogg"]
 description = "Verify Vorbis looping and EOF in both SDKs and hosts"

@@ -32,7 +32,7 @@ const tasks = JSON.parse(execute(["tasks", "ls", "--json"]))
   .filter(
     ({ name }) =>
       name === "build:odin" ||
-      name === "deps:vorbis" ||
+      name.startsWith("deps:vorbis") ||
       name.startsWith("deps:player:") ||
       name.startsWith("deps:trace:"),
   );
@@ -148,7 +148,7 @@ function fixture() {
         mkdirSync(dirname(resolve(root, file)), { recursive: true });
       }
       const commands = task.outputs.map((file) => `echo fixture > "${file}"`);
-      if (task.name === "deps:vorbis") {
+      if (task.name.startsWith("deps:vorbis")) {
         // Give concurrently scheduled outer and nested graphs time to observe
         // a stale decoder, as happens with a real compiler on hosted runners.
         commands.unshift('node -e "setTimeout(() => {}, 200)"');
@@ -260,8 +260,17 @@ test("mise rebuilds only the artifacts affected by edits and missing outputs", a
             "deps:trace:graphics",
             "deps:trace:resources",
             name,
+            "deps:vorbis:native",
           ]
-        : [name];
+        : name === "deps:vorbis:native"
+          ? [
+              "deps:player:native-binary",
+              "deps:trace:audio",
+              "deps:trace:graphics",
+              "deps:trace:resources",
+              name,
+            ]
+          : [name];
     assert.deepEqual(run(...targets), rebuilt, `recover missing ${missing} through aggregate`);
     for (const file of files) {
       assert.ok(existsSync(resolve(root, file)));

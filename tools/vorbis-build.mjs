@@ -10,7 +10,30 @@ const msvcFlags =
   process.platform === "win32" ? ["-A", "x64", "-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded"] : [];
 const root = resolve(repo, "build/vorbis");
 const prefix = resolve(root, "install");
+const bridge = resolve(repo, "runtime/vorbis");
 await mkdir(root, { recursive: true });
+
+// The Windows native player links this bridge; it needs the libraries installed by the default build.
+if (process.argv.includes("--bridge")) {
+  run(tool("cmake"), [
+    "-S",
+    bridge,
+    "-B",
+    resolve(root, "native"),
+    ...msvcFlags,
+    `-DCMAKE_PREFIX_PATH=${prefix}`,
+  ]);
+  run(tool("cmake"), [
+    "--build",
+    resolve(root, "native"),
+    "--config",
+    "Release",
+    "--parallel",
+    "4",
+  ]);
+  console.log("Built native Vorbis bridge.");
+  process.exit(0);
+}
 for (const [name, version, hash] of [
   ["libogg", "1.3.5", "c4d91be36fc8e54deae7575241e03f4211eb102afb3fc0775fbbc1b740016705"],
   ["libvorbis", "1.3.7", "b33cc4934322bcbf6efcbacf49e3ca01aadbea4114ec9589d1b1e9d20f72954b"],
@@ -62,16 +85,6 @@ for (const [name, version, hash] of [
     "4",
   ]);
 }
-const bridge = resolve(repo, "runtime/vorbis");
-run(tool("cmake"), [
-  "-S",
-  bridge,
-  "-B",
-  resolve(root, "native"),
-  ...msvcFlags,
-  `-DCMAKE_PREFIX_PATH=${prefix}`,
-]);
-run(tool("cmake"), ["--build", resolve(root, "native"), "--config", "Release", "--parallel", "4"]);
 const sources = [
   "mdct",
   "smallft",
@@ -115,4 +128,4 @@ run(tool("emcc"), [
   "-o",
   resolve(root, "vorbis.js"),
 ]);
-console.log("Built native and browser Vorbis decoder adapters.");
+console.log("Built browser Vorbis decoder adapter.");
