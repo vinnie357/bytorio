@@ -40,11 +40,16 @@ export const script = (file, args = []) =>
 export const task = (name) => run(mise, ["run", name], { stdio: "inherit", timeout: 600000 });
 
 // Native player naming and libraries. Windows ships Odin's vendored SDL3.dll and links
-// Wasmtime as a DLL. macOS builds SDL3 from source (deps:sdl3:native) and links Wasmtime
-// statically, so only the SDL3 dylib travels beside the executable.
+// Wasmtime as a DLL. macOS and Linux build SDL3 from source (deps:sdl3:native) and link Wasmtime
+// statically, so only the SDL3 library travels beside the executable.
 export const windowsHost = process.platform === "win32";
 export const nativePlayer = windowsHost ? "player.exe" : "player";
-export const sdlLibraryName = windowsHost ? "SDL3.dll" : "libSDL3.0.dylib";
+export const darwinHost = process.platform === "darwin";
+export const sdlLibraryName = windowsHost
+  ? "SDL3.dll"
+  : darwinHost
+    ? "libSDL3.0.dylib"
+    : "libSDL3.so.0";
 export const sdlBuildRoot = resolve(repo, "build/sdl3");
 export const sdlLibrary = () =>
   windowsHost
@@ -58,7 +63,8 @@ export const nativeLinkerFlags = ({ harness = false } = {}) => {
     return [];
   }
   const library = resolve(sdlBuildRoot, "install/lib");
-  const rpaths = ["@executable_path", ...(harness ? [library] : [])];
+  // Odin already adds $ORIGIN to every Linux executable.
+  const rpaths = [...(darwinHost ? ["@executable_path"] : []), ...(harness ? [library] : [])];
   const flags = rpaths.map((path) => `-Wl,-rpath,${path}`).join(" ");
   return [`-extra-linker-flags:-L${library} ${flags}`];
 };

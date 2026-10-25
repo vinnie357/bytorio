@@ -32,7 +32,7 @@ async function fixture(platform) {
     ]) {
       await put(compilerRoot, name);
     }
-    await put(sdlRoot, "install/lib/libSDL3.0.dylib");
+    await put(sdlRoot, `install/lib/${sdlLibraryName}`);
     await put(sdlRoot, "SDL3-3.4.2/LICENSE.txt");
     await put(dependency, "wasmtime.dll");
     await put(dependency, "../LICENSE");

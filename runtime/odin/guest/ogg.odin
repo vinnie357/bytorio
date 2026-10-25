@@ -8,6 +8,8 @@ when ODIN_OS == .Windows {
     foreign import vorbis {"../../../build/vorbis/native/Release/bytorio-vorbis.lib", "../../../build/vorbis/install/lib/vorbisfile.lib", "../../../build/vorbis/install/lib/vorbis.lib", "../../../build/vorbis/install/lib/ogg.lib"}
 } else when ODIN_OS == .Darwin {
     foreign import vorbis {"../../../build/vorbis/native/libbytorio-vorbis.a", "../../../build/vorbis/install/lib/libvorbisfile.a", "../../../build/vorbis/install/lib/libvorbis.a", "../../../build/vorbis/install/lib/libogg.a"}
+} else when ODIN_OS == .Linux {
+    foreign import vorbis {"../../../build/vorbis/native/libbytorio-vorbis.a", "../../../build/vorbis/install/lib/libvorbisfile.a", "../../../build/vorbis/install/lib/libvorbis.a", "../../../build/vorbis/install/lib/libogg.a", "system:m"}
 }
 foreign vorbis {
     vorbis_open :: proc "c" (bytes: rawptr, size: i32) -> i32 ---

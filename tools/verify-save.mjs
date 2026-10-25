@@ -61,12 +61,17 @@ for (const language of ["odin", "luau"]) {
   const [locked, readOnly, writable] = windowsHost
     ? [saved, 0o444, 0o666]
     : [saveDirectory, 0o555, 0o755];
-  await chmod(locked, readOnly);
-  try {
-    await native([4], 1);
-    assert.deepEqual(await readFile(saved), expected, "failed atomic replace retains prior save");
-  } finally {
-    await chmod(locked, writable);
+  // root ignores permission bits, so a root container cannot provoke the failure.
+  if (process.getuid?.() === 0) {
+    console.log("Skipping the failed-replace case: root ignores read-only permissions");
+  } else {
+    await chmod(locked, readOnly);
+    try {
+      await native([4], 1);
+      assert.deepEqual(await readFile(saved), expected, "failed atomic replace retains prior save");
+    } finally {
+      await chmod(locked, writable);
+    }
   }
   await native([8, 0, 2]);
   assert.deepEqual(await readFile(saved), expected.subarray(0, 4096));

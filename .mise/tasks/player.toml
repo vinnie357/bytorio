@@ -190,7 +190,7 @@ sources = [
   ".mise/toolchain.toml",
 ]
 outputs = [
-  "build/odin-player/native/{% if os() == 'windows' %}SDL3.dll{% else %}libSDL3.0.dylib{% endif %}",
+  "build/odin-player/native/{% if os() == 'windows' %}SDL3.dll{% elif os() == 'macos' %}libSDL3.0.dylib{% else %}libSDL3.so.0{% endif %}",
   # Wasmtime is static off Windows; its license stands in so every host declares real files.
   "build/odin-player/native/{% if os() == 'windows' %}wasmtime.dll{% else %}licenses/wasmtime.txt{% endif %}",
   "build/odin-player/native/licenses/wasmtime.txt",

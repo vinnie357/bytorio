@@ -202,11 +202,13 @@ async function prepare(path) {
   }
   return { ...spec, generated };
 }
-// The native player targets Windows x64 and macOS arm64. Other hosts are unverified and fail
-// rather than guess.
+// The native player targets Windows x64, macOS arm64 and Linux x86_64. Other hosts are unverified
+// and fail rather than guess.
 export const nativeExport =
-  process.platform === "win32" || (process.platform === "darwin" && process.arch === "arm64");
-export const nativeHostNote = "Windows x64 or macOS arm64";
+  process.platform === "win32" ||
+  (process.platform === "darwin" && process.arch === "arm64") ||
+  (process.platform === "linux" && process.arch === "x64");
+export const nativeHostNote = "Windows x64, macOS arm64 or Linux x86_64";
 // Verifiers that run the native player call this first, so they fail clearly elsewhere.
 export function requireNativePlayer() {
   if (!nativeExport) {

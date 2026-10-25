@@ -83,8 +83,14 @@ if (nativeExport) {
 } else {
   // Only the browser export exists, and --native fails before building or spawning.
   await assert.rejects(access(resolve(project, "build/native")), { code: "ENOENT" });
-  assert.match(cli(["run", project, "--native"], 1).stderr, /Windows x64 or macOS arm64/);
-  assert.match(cli(["watch", project, "--native"], 1).stderr, /Windows x64 or macOS arm64/);
+  assert.match(
+    cli(["run", project, "--native"], 1).stderr,
+    /Windows x64, macOS arm64 or Linux x86_64/,
+  );
+  assert.match(
+    cli(["watch", project, "--native"], 1).stderr,
+    /Windows x64, macOS arm64 or Linux x86_64/,
+  );
   cli(["build", project, "--native"]);
 }
 const bundled = await readFile(resolve(project, "build/web/game.luau"), "utf8");
