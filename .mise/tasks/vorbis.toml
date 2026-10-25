@@ -13,3 +13,9 @@ run = "node tools/vorbis-build.mjs --bridge"
 ["test:ogg"]
 description = "Verify Vorbis looping and EOF in both SDKs and hosts"
 run = "node tools/verify-ogg.mjs"
+
+# Non-Windows native players link this SDL3 build; Windows uses Odin's vendored SDL3.dll.
+["deps:sdl3:native"]
+sources = ["tools/sdl3-build.mjs", ".mise/toolchain.toml"]
+outputs = ["build/sdl3/install/lib/libSDL3.dylib"]
+run = "node tools/sdl3-build.mjs"
