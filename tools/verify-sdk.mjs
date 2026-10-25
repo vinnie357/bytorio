@@ -17,6 +17,10 @@ import {
   submitDrawing,
   rasterizeDrawing,
 } from "../runtime/odin/web/policy.js";
+if (!nativeExport) {
+  console.log("Native player checks skipped: the native player is built only on Windows x64.");
+}
+const parity = nativeExport ? "native/browser" : "browser-only";
 const contract = JSON.parse(await readFile("sdk/contract.json", "utf8"));
 const root = resolve("build/sdk-verification", randomUUID());
 await mkdir(root, { recursive: true });
@@ -432,5 +436,5 @@ await assert.rejects(
   /Missing module|escapes/,
 );
 console.log(
-  "SDK conformance passed: strict authoring, ABI exports, 120-frame native/browser parity, input edges, pointer, random vectors, modes, drawing, audio, reload and validation.",
+  `SDK conformance passed: strict authoring, ABI exports, 120-frame ${parity} parity, input edges, pointer, random vectors, modes, drawing, audio, reload and validation.`,
 );
