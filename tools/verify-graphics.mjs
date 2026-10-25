@@ -5,7 +5,7 @@ import { randomUUID } from "node:crypto";
 import { timedSpawnSync as spawnSync } from "./command-timing.mjs";
 import { once } from "node:events";
 import { chromium } from "./browser-timing.mjs";
-import { createProject, buildProject } from "./sdk/project.mjs";
+import { createProject, buildProject, requireNativePlayer } from "./sdk/project.mjs";
 import { serve } from "./serve.mjs";
 import { tool, dependencyRoot, task } from "./toolchain.mjs";
 import {
@@ -18,6 +18,7 @@ import {
   rasterizeDrawing,
   checkExecutor,
 } from "../runtime/odin/web/policy.js";
+requireNativePlayer();
 
 const root = resolve("build/graphics-verification", randomUUID());
 await mkdir(root, { recursive: true });

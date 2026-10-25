@@ -7,6 +7,8 @@ import { chromium } from "playwright";
 import { buildModels } from "../examples/models/tools/build.mjs";
 import { serve } from "./serve.mjs";
 import { run } from "./toolchain.mjs";
+import { requireNativePlayer } from "./sdk/project.mjs";
+requireNativePlayer();
 
 const gpu = process.argv.includes("--gpu");
 const root = resolve("build/model-verification", randomUUID());

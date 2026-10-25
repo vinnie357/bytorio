@@ -10,6 +10,8 @@ import { odinUnitTests } from "./odin-unit-tests.mjs";
 import { serve } from "./serve.mjs";
 import { negotiateProfile } from "../runtime/odin/web/policy.js";
 import { resourceSchema } from "../runtime/odin/web/constants.js";
+import { requireNativePlayer } from "./sdk/project.mjs";
+requireNativePlayer();
 
 const profile = JSON.parse(await readFile("sdk/profiles/compact-3d-preview-1.json"));
 const baseProfile = JSON.parse(await readFile("sdk/profiles/resource-av-1.json"));

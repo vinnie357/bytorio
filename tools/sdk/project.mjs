@@ -206,6 +206,12 @@ async function prepare(path) {
 export const nativeExport = process.platform === "win32";
 // Hosts where the browser-only build has been run and checked. Others fail rather than guess.
 const browserOnlyHosts = ["darwin"];
+// Verifiers that run the native player call this first, so they fail clearly off Windows.
+export function requireNativePlayer() {
+  if (!nativeExport) {
+    throw new Error("native player is built only on Windows x64");
+  }
+}
 function requireVerifiedHost() {
   if (!nativeExport && !browserOnlyHosts.includes(process.platform)) {
     throw new Error(
