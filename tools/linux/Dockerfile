@@ -39,4 +39,16 @@ RUN git clone --depth 1 --branch "${EMSDK_TAG}" https://github.com/emscripten-co
  && git clone https://github.com/jdx/vfox-emsdk /root/.local/share/mise/plugins/vfox-jdx-vfox-emsdk \
  && git -C /root/.local/share/mise/plugins/vfox-jdx-vfox-emsdk checkout "${VFOX_EMSDK_COMMIT}"
 
+# A virtual X server and Mesa's software renderer let the GPU checks run without a display.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends libgl1-mesa-dri libglx-mesa0 xvfb \
+ && rm -rf /var/lib/apt/lists/*
+
+# Rosetta leaves a stale stat buffer behind when lstat fails; see rosetta-lstat.c. Luau 0.743 hits
+# it and rejects every .luaurc, so preload the fix for everything run in this image.
+COPY rosetta-lstat.c /tmp/rosetta-lstat.c
+RUN gcc -shared -fPIC -O2 -o /usr/local/lib/rosetta-lstat.so /tmp/rosetta-lstat.c -ldl \
+ && rm /tmp/rosetta-lstat.c
+ENV LD_PRELOAD=/usr/local/lib/rosetta-lstat.so
+
 WORKDIR /work

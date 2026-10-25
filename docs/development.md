@@ -12,14 +12,16 @@ root CMake build have been removed; historical implementations remain in Git.
 
 Use [mise](https://mise.jdx.dev/) 2026.10.8 or newer and the pinned toolchain in
 `.mise/toolchain.toml`, included by `mise.toml`. The SDK CLI targets Windows
-x64 and macOS arm64 development, each with a native player and a browser export. Linux is
-unverified. Players need neither a compiler nor Node.js to run.
+x64, macOS arm64 and Linux x86_64 development, each with a native player and a browser export.
+Linux is built and tested in a pinned container (below); Players need neither a compiler nor Node.js to run.
 
 Mise installs Node.js, Odin (including SDL), the Wasmtime C API, odinfmt from OLS,
 StyLua, and the prebuilt Luau analyzer. It also installs CMake, Ninja and
 Emscripten 6.0.12. Native builds require the Windows linker prerequisites from
 Odin's installation guide, or the Xcode command line tools on macOS. On macOS, `deps:sdl3:native`
-builds the pinned SDL3 from source and the player links Wasmtime statically. Emscripten builds the C++ Luau compiler/VM and its
+builds the pinned SDL3 from source and the player links Wasmtime statically. On Linux, the C
+compiler, `pkg-config` and the SDL3 development headers come from the container image, and the
+player loads `libSDL3.so.0` from beside the executable. Emscripten builds the C++ Luau compiler/VM and its
 adapter into `luau-executor.wasm`; the Odin player runs this same module on both
 hosts. The executor uses pinned Luau sources under
 `build/luau-executor/_deps/luau-src`; the analyzer matches Luau 0.743.
@@ -351,3 +353,12 @@ either contract. This updates the Odin, Luau, C++ bridge and browser constants;
 `mise run lint` checks that generated files are current. Keep unrelated meanings
 separate: a white tint, an integer limit and a checksum mask can have the same
 value without being the same constant.
+
+## Linux container
+
+`mise run container:linux:build` builds a pinned x86_64 Linux image (`tools/linux/Dockerfile`) on
+Apple's `container` CLI, and `mise run container:linux -- <command>` runs a command in it, for
+example `mise run container:linux -- mise run validate test:sdk`. The checkout is copied into the
+container's own `/work`, so Linux builds never touch the host `build/` directory, and the
+container keeps its tool installs between runs. `mise run container:linux:stop` removes it.
+The image is Ubuntu 22.04, glibc 2.35, the oldest glibc of any SteamOS 3 release.

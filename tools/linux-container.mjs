@@ -5,7 +5,7 @@ import { repo } from "./toolchain.mjs";
 // Runs commands in the pinned x86_64 Linux image on Apple's `container` CLI (Rosetta). The
 // checkout is mounted read-only and copied into the container's own /work, so Linux builds never
 // touch the host's build/ directory. The container persists between runs to keep its tool installs.
-const image = "bytorio-linux:ubuntu22.04-1";
+const image = "bytorio-linux:ubuntu22.04-2";
 const name = "bytorio-linux";
 const [action, ...rest] = process.argv.slice(2);
 const usage = "Usage: linux-container.mjs build | run <command...> | stop";
@@ -78,6 +78,13 @@ function inContainer(command) {
     "mise trust -q /work",
     // Tool shims put node, odin and the rest on PATH for plain commands.
     'export PATH="$HOME/.local/share/mise/shims:$PATH"',
+    // Node modules and the Playwright browser are Linux builds, so they are installed here rather
+    // than copied from the host; both are skipped while the lock file is unchanged.
+    "export PLAYER_BROWSER_CHANNEL=chromium",
+    "if ! cmp -s package-lock.json node_modules/.container-lock; then",
+    "  npm ci --no-audit --no-fund >/dev/null && cp package-lock.json node_modules/.container-lock",
+    "  npx playwright install --with-deps chromium >/dev/null",
+    "fi",
     command,
   ].join("\n");
   return container(["exec", "--workdir", "/work", name, "bash", "-lc", script], { check: false });
