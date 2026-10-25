@@ -49,7 +49,7 @@ try {
     if (options.web && options.native) {
       throw new Error("Choose --web or --native");
     }
-    if (options.native && !nativeExport) {
+    if (options.native && (action === "run" || action === "watch") && !nativeExport) {
       throw new Error("--native needs the Windows x64 player; use --web on this host");
     }
     if (options.fps !== undefined) {
