@@ -44,9 +44,23 @@ ENOENT, so a missing `.config.luau` looks like a regular file. A source build of
 arm64 Linux passes; the same source built for x86_64 fails only under Rosetta. The image preloads
 `rosetta-lstat.so`, which zeroes the buffer on failure. Real x86_64 hardware needs no shim.
 
+## Verified in the container
+
+`test:player-export`, `test:build-tasks` and `test:sdk` pass (the SDK check covers the 120-frame
+native replay, the native smoke and the browser parity run in Playwright Chromium). `test:save` and
+`test:odin` pass too; as root the failed-replace case of the save verifier is skipped because root
+ignores read-only permissions. `byt new`, `check`, `pack` and `run --web` work, and the pixel
+tactics cartridge packed in the container is byte-identical to the one packed on macOS. Its native
+smoke reports the same state hash on macOS arm64, Linux x86_64 (CPU renderer) and Linux x86_64
+(GPU renderer under Xvfb and Mesa llvmpipe): `2095723199`.
+
 ## Not run
 
-- GPU checks against a real GPU. Under Xvfb with Mesa llvmpipe the GPU renderer starts and the
-  pixel tactics smoke hash matches the CPU renderer.
-- Audio output on a real device (dummy driver only), Wayland and Game Mode input, and Steam Input.
-- Deck frame pacing at 1280x800.
+- `test:gpu` compares native OpenGL against browser WebGL pixel hashes; under llvmpipe and
+  SwiftShader they differ, so the parity check says nothing about a real GPU. Other GPU verifiers
+  were not run.
+- Audio output on a real device (dummy driver only), Wayland and Game Mode input, Steam Input and
+  the default save directory on a Deck (`$XDG_DATA_HOME` or `~/.local/share/Bytorio/saves`).
+- Deck frame pacing at 1280x800, and a Linux arm64 host (the Wasmtime pin is x86_64 only).
+- Export packaging into `pixel-tactics-linux-x86_64.zip`, including a `.desktop` entry and
+  executable bits, is the next step for issue 16.
