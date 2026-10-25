@@ -43,7 +43,9 @@ in Odin. `pressed` and `released` are stable throughout a tick and its draws;
 querying them does not consume an event. Inactive pointers return false,0,0.
 The [extended input contract](README.md#direction-and-camera-input) adds mouse
 buttons, hover, wheel and gameplay keys. `buttons()` remains the original five
-bits; use `all_buttons()` for the full unsigned 32-bit mask.
+bits; use `all_buttons()` for the full unsigned 32-bit mask. A gamepad sends
+existing bits (B is `escape`, Start is `map`, shoulders are `rotate_*`); see
+[Gamepad](README.md#gamepad).
 `debug_position` is an optional pair of numbers for replay tools, bounded to ±4096;
 it does not move sprites or alter simulation. The version strings are Luau's
 `byt.version` and Odin's `byt.VERSION`.

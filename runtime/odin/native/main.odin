@@ -155,28 +155,7 @@ input :: proc(app: ^App) -> abi.Input {
 
             result.buttons |= 16
         }
-        if app.gamepad != nil {
-            if sdl.GetGamepadButton(app.gamepad, .DPAD_LEFT) {
-
-                result.buttons |= 1 | abi.BUTTON_MOVE_LEFT
-            }
-            if sdl.GetGamepadButton(app.gamepad, .DPAD_RIGHT) {
-
-                result.buttons |= 2 | abi.BUTTON_MOVE_RIGHT
-            }
-            if sdl.GetGamepadButton(app.gamepad, .DPAD_UP) {
-
-                result.buttons |= 4 | abi.BUTTON_MOVE_UP
-            }
-            if sdl.GetGamepadButton(app.gamepad, .DPAD_DOWN) {
-
-                result.buttons |= 8 | abi.BUTTON_MOVE_DOWN
-            }
-            if sdl.GetGamepadButton(app.gamepad, .SOUTH) {
-
-                result.buttons |= 16
-            }
-        }
+        result.buttons |= gamepad_buttons(app.gamepad)
     }
     x, y, lx, ly: f32
     buttons := sdl.GetMouseState(&x, &y)

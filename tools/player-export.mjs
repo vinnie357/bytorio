@@ -24,6 +24,7 @@ const webScripts = [
   "save.js",
   "text-session.js",
   "text-input.js",
+  "gamepad.js",
   "executor-cache.js",
   "executor-cache-core.js",
   "frame-clock.js",
