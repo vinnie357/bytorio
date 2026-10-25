@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -54,3 +54,46 @@ test("a fresh lock folder with no pid is still respected", () => {
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /Timed out/);
 });
+
+// Each waiter claims the critical section with an exclusive file. A second claimant while the first
+// still sits inside means two processes held the lock at once.
+function waiter(lock, inside, violations) {
+  const script = `import { appendFileSync, rmSync, writeFileSync } from "node:fs";
+import { acquireLock } from ${JSON.stringify(module)};
+await acquireLock(${JSON.stringify(lock)}, { timeoutMs: 30000 });
+try {
+  writeFileSync(${JSON.stringify(inside)}, String(process.pid), { flag: "wx" });
+} catch {
+  appendFileSync(${JSON.stringify(violations)}, "overlap\\n");
+}
+Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 120);
+rmSync(${JSON.stringify(inside)}, { force: true });`;
+  return new Promise((done) => {
+    const child = spawn(process.execPath, ["--input-type=module", "-e", script]);
+    child.on("close", done);
+  });
+}
+
+for (const waiters of [2, 8]) {
+  test(`${waiters} waiters taking over one stale lock never overlap`, async () => {
+    for (let round = 0; round < 5; round++) {
+      const root = mkdtempSync(join(tmpdir(), "directory-lock-"));
+      const lock = join(root, ".lock");
+      const violations = join(root, "violations");
+      // Dead owner in even rounds, abandoned pid-less folder in odd rounds.
+      mkdirSync(lock);
+      if (round % 2 === 0) {
+        writeFileSync(join(lock, "pid"), "2147483646");
+      } else {
+        const old = new Date(Date.now() - 60000);
+        utimesSync(lock, old, old);
+      }
+      const codes = await Promise.all(
+        Array.from({ length: waiters }, () => waiter(lock, join(root, "inside"), violations)),
+      );
+      assert.deepEqual(codes, Array(waiters).fill(0));
+      assert.equal(existsSync(violations), false, `round ${round}: two holders at once`);
+      assert.equal(existsSync(lock), false, "the last holder releases the lock");
+    }
+  });
+}
