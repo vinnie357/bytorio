@@ -1,5 +1,5 @@
+import { readFileSync, rmSync } from "node:fs";
 import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
-import { rmSync } from "node:fs";
 import { resolve } from "node:path";
 
 const pause = (milliseconds) => new Promise((done) => setTimeout(done, milliseconds));
@@ -22,6 +22,50 @@ async function abandoned(directory) {
   return Date.now() - mtimeMs > graceMs;
 }
 
+async function isStale(directory) {
+  const owner = Number(await readFile(resolve(directory, "pid"), "utf8").catch(() => 0));
+  return owner ? !alive(owner) : abandoned(directory);
+}
+
+// Two waiters can both judge one lock stale. If each deleted it, the slower one would delete the
+// live lock that the faster one had just created. Takeovers therefore go through a short-lived gate
+// folder, and the lock is judged again inside the gate. Waiters that lose the gate simply retry.
+const gateStaleMs = 10000;
+async function takeOver(directory) {
+  const gate = `${directory}.takeover`;
+  try {
+    await mkdir(gate);
+  } catch (error) {
+    if (error.code !== "EEXIST") {
+      throw error;
+    }
+    // A gate left by a process that died inside it.
+    const { mtimeMs } = await stat(gate).catch(() => ({ mtimeMs: Date.now() }));
+    if (Date.now() - mtimeMs > gateStaleMs) {
+      await rm(gate, { recursive: true, force: true });
+    }
+    return;
+  }
+  try {
+    if (await isStale(directory)) {
+      await rm(directory, { recursive: true, force: true });
+    }
+  } finally {
+    await rm(gate, { recursive: true, force: true });
+  }
+}
+
+// Release only a lock that still records this process, so a lock taken over from us is left alone.
+function release(directory) {
+  try {
+    if (readFileSync(resolve(directory, "pid"), "utf8") === String(process.pid)) {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  } catch {
+    // Already gone.
+  }
+}
+
 // Serializes scripts that share a build folder. `mkdir` is atomic, so exactly one caller creates
 // the lock folder; the others wait, and a lock whose owner process is gone is taken over. The lock
 // is released when the process exits, however it exits.
@@ -31,16 +75,15 @@ export async function acquireLock(directory, { timeoutMs = 600000 } = {}) {
     try {
       await mkdir(directory);
       await writeFile(resolve(directory, "pid"), String(process.pid));
-      process.on("exit", () => rmSync(directory, { recursive: true, force: true }));
+      process.on("exit", () => release(directory));
       return;
     } catch (error) {
       if (error.code !== "EEXIST") {
         throw error;
       }
     }
-    const owner = Number(await readFile(resolve(directory, "pid"), "utf8").catch(() => 0));
-    if (owner ? !alive(owner) : await abandoned(directory)) {
-      await rm(directory, { recursive: true, force: true });
+    if (await isStale(directory)) {
+      await takeOver(directory);
     } else if (Date.now() - started > timeoutMs) {
       throw new Error(`Timed out waiting for ${directory}`);
     }
