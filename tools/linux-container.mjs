@@ -81,6 +81,7 @@ function inContainer(command) {
     // Node modules and the Playwright browser are Linux builds, so they are installed here rather
     // than copied from the host; both are skipped while the lock file is unchanged.
     "export PLAYER_BROWSER_CHANNEL=chromium",
+    "mise install node >/dev/null",
     "if ! cmp -s package-lock.json node_modules/.container-lock; then",
     "  npm ci --no-audit --no-fund >/dev/null && cp package-lock.json node_modules/.container-lock",
     "  npx playwright install --with-deps chromium >/dev/null",
