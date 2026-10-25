@@ -12,7 +12,8 @@ root CMake build have been removed; historical implementations remain in Git.
 
 Use [mise](https://mise.jdx.dev/) 2026.10.8 or newer and the pinned toolchain in
 `.mise/toolchain.toml`, included by `mise.toml`. The SDK CLI currently targets Windows
-x64 development. Players need neither a compiler nor Node.js to run.
+x64 development. macOS arm64 supports browser export and authoring; the native player remains
+Windows x64 only, and Linux is unverified. Players need neither a compiler nor Node.js to run.
 
 Mise installs Node.js, Odin (including SDL), the Wasmtime C API, odinfmt from OLS,
 StyLua, and the prebuilt Luau analyzer. It also installs CMake, Ninja and
