@@ -81,42 +81,45 @@ left alone.
 - wasmtime archive checksum pinned in `.mise/toolchain.toml`; mise rejects a mismatch. It equals
   the digest GitHub publishes for the asset.
 
-## Remaining work for the full port
+## Native on by default
 
-Sizes are rough counts of files and changed lines.
+Native is now the default macOS path: `nativeExport` is true on Windows x64 and macOS arm64,
+`byt run|watch --native` launches `player` or `player.exe`, and exports stage `player`,
+`libSDL3.0.dylib` and licenses (Wasmtime is static), signed ad hoc with `codesign`. Shared names
+and libraries live in `tools/toolchain.mjs` (`nativePlayer`, `sdlLibraryName`,
+`nativeLinkerFlags`). The harness sources under `tests/*/player` and `tests/gpu/native` dropped
+their `_windows` suffix. Harness executables keep their `.exe` file names on macOS.
 
-- Export staging: `tools/player-export.mjs`, `tools/stage-player.mjs` and the
-  `deps:player:native-support` outputs hardcode `player.exe`, `SDL3.dll`, `wasmtime.dll` and
-  `vendor/sdl3/SDL3.dll`. macOS stages `player`, `libSDL3.0.dylib` and the license, and no wasmtime
-  library because it is static. `tools/player-export.test.mjs` also changes. 4 files, about 60 lines.
-- `nativeExport` on darwin: `tools/sdk/project.mjs` (`nativeExport`, `browserOnlyHosts`,
-  `requireNativePlayer`, the `build:odin` choice), `tools/byt.mjs`, `tools/verify-sdk.mjs` and
-  its messages. Semantics were left unchanged in the spike. 3 files, about 40 lines.
-- Verifier executable names: about 20 verifiers reference `player.exe` or `SDL3.dll` (for example
-  `verify-gpu`, `verify-audio`, `verify-graphics`, `verify-resources`, `verify-textured-*`,
-  `verify-billboards`, `verify-ogg`, `verify-sdk`, `verify-profile`, `verify-text-input`). A shared
-  helper for the executable name and library copy removes most of the edits. About 22 files,
-  about 120 lines.
-- Test player sources: `tests/{audio,graphics,ogg,resources}/player/main_windows.odin` (348 lines)
-  are Windows-only and need the same rename, plus the `build:trace` and `build-tasks.test.mjs`
-  references. 4 renames, about 20 lines.
+Verified on macOS arm64: `test:player-export`, `test:build-tasks`, `test:sdk`, `test:save`,
+`test:text-input`, `test:models`, `test:profile`, `test:graphics`, `test:3d`, `test:textured3d`,
+`test:billboards`, `test:ogg`, `test:cartridge`, `test:content`, `test:audio`, `test:odin`,
+`test:display`, and the GPU set `test:gpu`, `test:models:gpu`, `test:billboards:gpu`,
+`test:textured3d:gpu` on a real display. Browser halves need `PLAYER_BROWSER_CHANNEL=chrome`
+(Playwright's headless shell is not installed).
+
+Found while doing it: the audio smoke reported `audioMixerFrame` 0 because the device thread
+started after the 120 headless ticks, so the smoke report now waits up to two seconds for the
+first PCM callback.
+
+## Remaining work
+
+- `test:resources`: `generate:check` reports `srgb_table.odin` stale on macOS because the
+  generator's `Math.pow` differs in the last digit from the Windows output. The generator needs
+  a platform-independent table. 1 file, about 20 lines.
+- Not run: `test:synthesis`, `test:ogg-startup`, `test:audio-admission`, `test:player-loading`,
+  `test:cartridge-cache` and the browser-only checks beyond those above.
+- Windows regression: nothing was run on Windows. The renames, `when ODIN_OS` imports and
+  `os()` task outputs are written to leave Windows behavior unchanged.
 - Release packaging: `tools/package-release.mjs`, `release-config.mjs`, `publish-release.mjs`
   and tests (a macOS archive with `player`, the dylib and licenses). 4 files, about 80 lines.
-- Signing and Gatekeeper: a downloaded `player` is quarantined and unsigned, and the bundled dylib
-  needs a matching signature. Requires an Apple Developer ID certificate, codesign with hardened
-  runtime, notarization and stapling. The link order uses `@rpath` with
-  `@executable_path`, so the dylib must stay beside the binary. Rough size: one script of about
-  80 lines, plus operator work to obtain credentials. Ad hoc signing is enough for local runs.
-- CI: `.github/workflows/build.yml` and `release.yml` run only on `windows-latest`. A macOS job
-  (arm64 runner) needs the toolchain install, `deps:player:native-binary`, the native verifiers
-  and the smoke run. macOS runners bill at 10x on private repos. 2 files, about 60 lines.
-- Docs: `docs/development.md` and the README platform statements. 2 files, about 20 lines.
+- Signing and Gatekeeper: distribution needs a Developer ID certificate, hardened runtime,
+  notarization and stapling; the ad hoc signature only serves local runs. Operator credentials.
+- CI: `.github/workflows/build.yml` and `release.yml` run only on `windows-latest`. A macOS
+  arm64 job bills at 10x on private repos. 2 files, about 60 lines.
 
 ## Blockers
 
 - None for the CPU or GPU renderer on arm64.
 - GPU verifiers need a real display on macOS, because the dummy video driver has no OpenGL.
 - Notarization needs operator-held credentials.
-- x86_64 macOS is untested. wasmtime publishes an `x86_64-macos` asset, but the pin is arm64 only.
-- Audio output was not exercised (the cartridge under test queues no audio); `hello` smoke passed
-  with the dummy audio driver only.
+- x86_64 macOS is unsupported: `nativeExport` requires arm64.
