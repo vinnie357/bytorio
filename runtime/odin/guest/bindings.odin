@@ -6,6 +6,9 @@ when ODIN_OS == .Windows {
 } else when ODIN_OS == .Darwin {
     // Static archive from the pinned aarch64-macos C API.
     foreign import wasmtime "deps:libwasmtime.a"
+} else when ODIN_OS == .Linux {
+    // Static archive from the pinned x86_64-linux C API; it needs the C math, dl and thread libraries.
+    foreign import wasmtime {"deps:libwasmtime.a", "system:m", "system:dl", "system:pthread"}
 }
 
 Engine :: distinct rawptr

@@ -72,6 +72,8 @@ for (const [name, version, hash] of [
     "-DCMAKE_POLICY_VERSION_MINIMUM=3.5",
     "-DCMAKE_POLICY_DEFAULT_CMP0091=NEW",
     `-DCMAKE_INSTALL_PREFIX=${prefix}`,
+    // Debian-style CMake would otherwise install into lib/<triplet>, where the player does not look.
+    "-DCMAKE_INSTALL_LIBDIR=lib",
     `-DCMAKE_PREFIX_PATH=${prefix}`,
     "-DBUILD_TESTING=OFF",
     "-DBUILD_SHARED_LIBS=OFF",

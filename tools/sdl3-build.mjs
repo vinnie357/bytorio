@@ -52,6 +52,7 @@ run(tool("cmake"), [
   `-DCMAKE_MAKE_PROGRAM=${tool("ninja")}`,
   "-DCMAKE_BUILD_TYPE=Release",
   `-DCMAKE_INSTALL_PREFIX=${prefix}`,
+  "-DCMAKE_INSTALL_LIBDIR=lib",
   "-DSDL_SHARED=ON",
   "-DSDL_STATIC=OFF",
   "-DSDL_TESTS=OFF",

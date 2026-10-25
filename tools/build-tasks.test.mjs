@@ -16,7 +16,7 @@ import { dirname, join, matchesGlob, relative, resolve } from "node:path";
 import { test } from "node:test";
 import { pathToFileURL } from "node:url";
 import { stagePlayerSupport } from "./player-export.mjs";
-import { windowsHost } from "./toolchain.mjs";
+import { sdlLibraryName, windowsHost } from "./toolchain.mjs";
 import { repo } from "./toolchain.mjs";
 
 const mise = process.env.MISE_BIN || "mise";
@@ -297,7 +297,7 @@ test("support task outputs cover every staged file", async () => {
     put(compilerRoot, file, "fixture");
   }
   const sdlRoot = resolve(root, "sdl3");
-  put(sdlRoot, "install/lib/libSDL3.0.dylib", "fixture");
+  put(sdlRoot, `install/lib/${sdlLibraryName}`, "fixture");
   put(sdlRoot, "SDL3-3.4.2/LICENSE.txt", "fixture");
   put(dependency, "wasmtime.dll", "fixture");
   put(dependency, "../LICENSE", "fixture");
@@ -329,7 +329,7 @@ test("copied support with old source timestamps becomes current in mise", async 
     "compiler/vendor/OpenGL/LICENSE_glad": "glad license",
     "dependency/lib/wasmtime.dll": "runtime binary",
     "dependency/LICENSE": "runtime license",
-    "sdl3/install/lib/libSDL3.0.dylib": "SDL dylib",
+    [`sdl3/install/lib/${sdlLibraryName}`]: "SDL library",
     "sdl3/SDL3-3.4.2/LICENSE.txt": "SDL license",
   };
   const old = new Date("2000-01-01T00:00:00Z");
@@ -340,7 +340,7 @@ test("copied support with old source timestamps becomes current in mise", async 
   // The library whose edits must restage: the Wasmtime DLL on Windows, the SDL3 dylib elsewhere.
   const [library, libraryInput, libraryText] = windowsHost
     ? ["wasmtime.dll", "dependency/lib/wasmtime.dll", "runtime binary"]
-    : ["libSDL3.0.dylib", "sdl3/install/lib/libSDL3.0.dylib", "SDL dylib"];
+    : [sdlLibraryName, `sdl3/install/lib/${sdlLibraryName}`, "SDL library"];
   const outputs = byName.get("deps:player:native-support").outputs;
   const helper = pathToFileURL(resolve(repo, "tools/player-export.mjs")).href;
   put(

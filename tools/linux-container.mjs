@@ -72,6 +72,9 @@ function inContainer(command) {
     "rsync -a --delete --exclude=/build --exclude=/node_modules --exclude=/.git /src/ /work/",
     "cd /work",
     "git init -q 2>/dev/null || true",
+    "mise trust -q /work",
+    // Tool shims put node, odin and the rest on PATH for plain commands.
+    'export PATH="$HOME/.local/share/mise/shims:$PATH"',
     command,
   ].join("\n");
   return container(["exec", "--workdir", "/work", name, "bash", "-lc", script], { check: false });

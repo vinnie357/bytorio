@@ -1,3 +1,4 @@
+#+build darwin, linux
 package guest
 
 import "core:strings"
