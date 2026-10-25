@@ -33,6 +33,7 @@ const tasks = JSON.parse(execute(["tasks", "ls", "--json"]))
     ({ name }) =>
       name === "build:odin" ||
       name.startsWith("deps:vorbis") ||
+      name.startsWith("deps:sdl3") ||
       name.startsWith("deps:player:") ||
       name.startsWith("deps:trace:"),
   );
@@ -270,7 +271,9 @@ test("mise rebuilds only the artifacts affected by edits and missing outputs", a
               "deps:trace:resources",
               name,
             ]
-          : [name];
+          : name === "deps:sdl3:native"
+            ? ["deps:player:native-binary", name]
+            : [name];
     assert.deepEqual(run(...targets), rebuilt, `recover missing ${missing} through aggregate`);
     for (const file of files) {
       assert.ok(existsSync(resolve(root, file)));

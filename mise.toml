@@ -57,7 +57,7 @@ run = "node tools/format-code.mjs cpp"
 description = "Build standalone native/browser players and fixtures"
 # Finish the shared decoder before entering a nested player graph. Trace tasks
 # can otherwise start the same decoder concurrently in the outer graph.
-depends = ["deps:vorbis", "deps:vorbis:native"]
+depends = ["deps:vorbis", "deps:vorbis:native", "deps:sdl3:native"]
 # Skip the nested graph on unchanged builds; tests verify this aggregate contract.
 outputs = [
   "build/odin-player/native/SDL3.dll",
