@@ -68,7 +68,7 @@ outputs = [
 run = "node tools/player-build.mjs web-audio"
 
 ["deps:player:native-binary"]
-depends = ["deps:vorbis:native"]
+depends = ["deps:vorbis:native", "deps:sdl3:native"]
 sources = [
   "runtime/odin/abi/**/*.odin",
   "runtime/odin/audio/**/*.odin",

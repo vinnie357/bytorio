@@ -28,6 +28,16 @@ if (!run(odin, ["version"]).includes("84bc3fc")) {
   throw new Error("Odin dev-2026-10 (84bc3fc) is required");
 }
 
+// Windows links Odin's vendored SDL3.lib. Other hosts link the pinned build under build/sdl3
+// and load it from beside the executable.
+function nativeLinkerFlags() {
+  if (process.platform === "win32") {
+    return [];
+  }
+  const sdl = resolve(repo, "build/sdl3/install/lib");
+  return [`-extra-linker-flags:-L${sdl} -Wl,-rpath,@executable_path`];
+}
+
 async function build(source, flags, output) {
   await mkdir(dirname(output), { recursive: true });
   run(odin, ["build", source, ...flags, `-out:${output}`], { stdio: "inherit" });
@@ -54,13 +64,10 @@ switch (artifact) {
     );
     break;
   case "native":
-    if (process.platform !== "win32") {
-      throw new Error("The native adapter currently targets Windows x64");
-    }
     await build(
       "runtime/odin/native",
-      [...common, `-collection:deps=${dependencyRoot()}`],
-      resolve(native, "player.exe"),
+      [...common, `-collection:deps=${dependencyRoot()}`, ...nativeLinkerFlags()],
+      resolve(native, process.platform === "win32" ? "player.exe" : "player"),
     );
     break;
   case "hello":
