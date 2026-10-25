@@ -20,7 +20,7 @@ It proves the native player builds and runs on macOS arm64. It is not the full p
 
 ## Pins
 
-- wasmtime 49.0.3, `wasmtime-v49.0.3-aarch64-macos-c-api.tar.xz`, pinned in `.mise/toolchain.toml`
+- wasmtime 49.0.3, `wasmtime-v49.0.3-aarch64-macos-c-api.tar.xz` (sha256 `0c853eb1...332c41b`), pinned in `.mise/toolchain.toml`
   as `"github:bytecodealliance/wasmtime[macos]"` with `os = ["macos"]`. mise treats the
   `[macos]` suffix as a backend option on the same tool, so `mise where` and `tool()` still
   resolve it through the unsuffixed name. The suffix only avoids a duplicate TOML key.
@@ -58,17 +58,33 @@ It proves the native player builds and runs on macOS arm64. It is not the full p
 ## Finding
 
 `backend.odin` passes `i32(sdl.GLProfile.CORE)`. `GLProfile` is a bit set, so this is 0, not the
-`CORE` mask (1). Windows tolerates it; macOS then gives a 2.1 context and fails. The darwin
-file re-requests the mask correctly. Fixing it on Windows too is a one-line change but alters
-Windows behavior, so it was left alone.
+`CORE` mask (1). This is a Bytorio call-site mistake, not a defect in the Odin bindings. Windows
+tolerates it; macOS then gives a 2.1 context and fails. The darwin file re-requests the mask
+correctly. Fixing it on Windows too is a one-line change but alters Windows behavior, so it was
+left alone.
+
+## Review fixes
+
+- The executor cache path must be an existing directory; a regular file there is an error on every OS.
+- Task outputs: `deps:sdl3:native` and `deps:vorbis:native` declare a stamp the script rewrites on
+  every host, because build tools leave an unchanged library untouched and mise then sees it as
+  stale. `native-binary` declares `player.exe` or `player` through a tera `os()` condition. Second
+  runs on macOS report "sources up-to-date, skipping" with no output warning.
+  `deps:player:native-support` still declares Windows files until export staging is ported.
+- Saves: macOS defaults to `~/Library/Application Support/Bytorio/saves`, mirroring the Windows
+  `%LOCALAPPDATA%\Bytorio\saves` layout, and an existing save directory is accepted.
+  `BYTORIO_SAVE_DIRECTORY` still overrides. `tools/verify-save.mjs` passed natively on macOS
+  through a temporary copy that pointed at the macOS player. One case changed: the
+  read-only-file replace failure cannot happen on POSIX, because rename ignores the target file
+  mode, so the copy used a read-only save directory. The real verifier still needs that case split
+  by OS.
+- wasmtime archive checksum pinned in `.mise/toolchain.toml`; mise rejects a mismatch. It equals
+  the digest GitHub publishes for the asset.
 
 ## Remaining work for the full port
 
 Sizes are rough counts of files and changed lines.
 
-- Task outputs: `deps:vorbis:native` and `deps:player:native-binary` declare Windows output
-  names (`Release/bytorio-vorbis.lib`, `player.exe`), so mise warns and reruns them on macOS.
-  Outputs need per-OS names. 2 files, about 10 lines.
 - Export staging: `tools/player-export.mjs`, `tools/stage-player.mjs` and the
   `deps:player:native-support` outputs hardcode `player.exe`, `SDL3.dll`, `wasmtime.dll` and
   `vendor/sdl3/SDL3.dll`. macOS stages `player`, `libSDL3.0.dylib` and the license, and no wasmtime
