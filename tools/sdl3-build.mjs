@@ -4,17 +4,20 @@ import { resolve } from "node:path";
 import { createHash } from "node:crypto";
 import { repo, run, tool } from "./toolchain.mjs";
 
+const root = resolve(repo, "build/sdl3");
+const stamp = resolve(root, "native.stamp");
+await mkdir(root, { recursive: true });
+
 // Windows ships Odin's vendored SDL3.dll. Other hosts link "system:SDL3", so the
 // native player builds the pinned release here. 3.4.2 matches Odin's vendor:sdl3 bindings.
 if (process.platform === "win32") {
+  await writeFile(stamp, "Windows uses the SDL3 vendored with Odin.\n");
   console.log("Windows uses the SDL3 vendored with Odin.");
   process.exit(0);
 }
 const version = "3.4.2";
 const hash = "ef39a2e3f9a8a78296c40da701967dd1b0d0d6e267e483863ce70f8a03b4050c";
-const root = resolve(repo, "build/sdl3");
 const prefix = resolve(root, "install");
-await mkdir(root, { recursive: true });
 
 const archive = resolve(root, `SDL3-${version}.tar.gz`);
 if (!existsSync(archive)) {
@@ -55,4 +58,5 @@ run(tool("cmake"), [
   "-DSDL_EXAMPLES=OFF",
 ]);
 run(tool("cmake"), ["--build", build, "--target", "install", "--parallel", "4"]);
+await writeFile(stamp, `SDL3 ${version}\n`);
 console.log("Built SDL3.");

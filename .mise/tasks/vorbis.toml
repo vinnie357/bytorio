@@ -3,19 +3,21 @@ sources = ["runtime/vorbis/**", "tools/vorbis-build.mjs", ".mise/toolchain.toml"
 outputs = ["build/vorbis/vorbis.js", "build/vorbis/vorbis.wasm"]
 run = "node tools/vorbis-build.mjs"
 
-# The Windows native player links this bridge; no other host builds or needs it.
+# The native player links this bridge. The stamp is rewritten on every run because CMake leaves an
+# unchanged archive untouched, which would otherwise look stale to mise.
 ["deps:vorbis:native"]
 depends = ["deps:vorbis"]
 sources = ["runtime/vorbis/**", "tools/vorbis-build.mjs", ".mise/toolchain.toml"]
-outputs = ["build/vorbis/native/Release/bytorio-vorbis.lib"]
+outputs = ["build/vorbis/native/bridge.stamp"]
 run = "node tools/vorbis-build.mjs --bridge"
 
 ["test:ogg"]
 description = "Verify Vorbis looping and EOF in both SDKs and hosts"
 run = "node tools/verify-ogg.mjs"
 
-# Non-Windows native players link this SDL3 build; Windows uses Odin's vendored SDL3.dll.
+# Non-Windows native players link this SDL3 build; Windows uses Odin's vendored SDL3.dll. Build
+# tools leave an unchanged library untouched, so each host declares a stamp the script rewrites.
 ["deps:sdl3:native"]
 sources = ["tools/sdl3-build.mjs", ".mise/toolchain.toml"]
-outputs = ["build/sdl3/install/lib/libSDL3.dylib"]
+outputs = ["build/sdl3/native.stamp"]
 run = "node tools/sdl3-build.mjs"

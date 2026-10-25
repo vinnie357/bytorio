@@ -92,7 +92,7 @@ sources = [
   "runtime/odin/web/constants.js",
 ]
 outputs = [
-  "build/odin-player/native/player.exe",
+  "build/odin-player/native/{% if os() == 'windows' %}player.exe{% else %}player{% endif %}",
 ]
 run = "node tools/player-build.mjs native"
 

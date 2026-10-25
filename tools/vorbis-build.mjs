@@ -32,6 +32,7 @@ if (process.argv.includes("--bridge")) {
     "--parallel",
     "4",
   ]);
+  await writeFile(resolve(root, "native/bridge.stamp"), "native Vorbis bridge\n");
   console.log("Built native Vorbis bridge.");
   process.exit(0);
 }

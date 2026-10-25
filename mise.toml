@@ -67,7 +67,7 @@ outputs = [
   "build/odin-player/native/licenses/opengl.txt",
   "build/odin-player/native/licenses/sdl3.txt",
   "build/odin-player/native/licenses/wasmtime.txt",
-  "build/odin-player/native/player.exe",
+  "build/odin-player/native/{% if os() == 'windows' %}player.exe{% else %}player{% endif %}",
   "build/odin-player/native/wasmtime.dll",
   "build/odin-player/web/audio-worklet.js",
   "build/odin-player/web/audio.wasm",
