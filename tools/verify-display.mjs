@@ -5,7 +5,7 @@ import { resolve } from "node:path";
 import { once } from "node:events";
 import { chromium } from "./browser-timing.mjs";
 import { serve } from "./serve.mjs";
-import { tool } from "./toolchain.mjs";
+import { tool, nativePlayer } from "./toolchain.mjs";
 import {
   submitDrawing,
   rasterizeDrawing,
@@ -62,7 +62,7 @@ for (let i = 0; i < 120; i++) {
 await writeFile(`${root}/display.inputs`, Array(120).fill(0).join("\n") + "\n");
 function native(path) {
   return spawnSync(
-    resolve(`${root}/native/player.exe`),
+    resolve(`${root}/native/${nativePlayer}`),
     ["--game", path, "--replay", `${root}/display.inputs`],
     { encoding: "utf8", timeout: 30000 },
   );
@@ -74,7 +74,7 @@ const bad = native(`${web}/display/invalid.wasm`);
 assert.notEqual(bad.status, 0);
 assert.match(bad.stderr, /unsupported display mode/);
 const presented = spawnSync(
-  resolve(`${root}/native/player.exe`),
+  resolve(`${root}/native/${nativePlayer}`),
   ["--game", `${web}/display/switch.wasm`, "--smoke"],
   {
     encoding: "utf8",

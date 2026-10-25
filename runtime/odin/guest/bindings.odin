@@ -1,7 +1,12 @@
 package guest
 
 // Handwritten subset of the Wasmtime 49.0.3 C API; no C/C++ runtime implementation.
-foreign import wasmtime "deps:wasmtime.dll.lib"
+when ODIN_OS == .Windows {
+    foreign import wasmtime "deps:wasmtime.dll.lib"
+} else when ODIN_OS == .Darwin {
+    // Static archive from the pinned aarch64-macos C API.
+    foreign import wasmtime "deps:libwasmtime.a"
+}
 
 Engine :: distinct rawptr
 Config :: distinct rawptr

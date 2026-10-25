@@ -10,26 +10,12 @@ import "core:fmt"
 import "core:os"
 import "core:strconv"
 import "core:strings"
-import windows "core:sys/windows"
 import "core:time"
 
 clock_ms :: proc() -> f64 {
 
     return time.duration_seconds(time.tick_since(time.Tick{})) * 1000
 }
-process_memory :: proc() -> (working, peak: uint) {
-    counters := windows.PROCESS_MEMORY_COUNTERS {
-        cb = size_of(windows.PROCESS_MEMORY_COUNTERS),
-    }
-    if !bool(
-        windows.GetProcessMemoryInfo(windows.GetCurrentProcess(), &counters, size_of(counters)),
-    ) {
-
-        return 0, 0
-    }
-    return counters.WorkingSetSize, counters.PeakWorkingSetSize
-}
-
 // PROTOTYPE: CPU work only, with display/audio presentation excluded.
 benchmark :: proc(
     app: ^App,

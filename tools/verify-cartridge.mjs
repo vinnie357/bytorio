@@ -1,3 +1,4 @@
+import { nativePlayer } from "./toolchain.mjs";
 import assert from "node:assert/strict";
 import { readFile, writeFile, mkdir, copyFile, unlink } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -22,7 +23,7 @@ const env = {
   SDL_RENDER_DRIVER: "software",
 };
 function native(language, args, status = 0) {
-  const result = spawnSync(resolve(projects[language], "build/native/player.exe"), args, {
+  const result = spawnSync(resolve(projects[language], "build/native", nativePlayer), args, {
     env,
     encoding: "utf8",
     timeout: 30000,

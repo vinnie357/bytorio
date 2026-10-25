@@ -499,7 +499,7 @@ run :: proc() -> int {
     }
     if len(source) > 0 && !no_executor_cache && cache_config == "" {
         directory := fmt.tprintf("%sexecutor-cache", base)
-        if os.make_directory_all(directory) != nil {
+        if !guest.ensure_directory(directory) {
 
             return error("cannot create executor cache directory")
         }
@@ -840,6 +840,14 @@ run :: proc() -> int {
         if !saved {
 
             return error(string(sdl.GetError()))
+        }
+    }
+    // The audio device thread can start after the 120 headless ticks finish, so the smoke report
+    // would otherwise race it on macOS. Give the first PCM callback a bounded time to arrive.
+    if smoke && app.game.resources.audio != nil {
+        for _ in 0 ..< 200 {
+            if mixer.load(&app.game.resources.audio.published_frame) > 0 { break }
+            sdl.Delay(10)
         }
     }
     // Double braces escape Odin's formatting syntax in the JSON report.

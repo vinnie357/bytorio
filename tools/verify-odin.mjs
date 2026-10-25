@@ -5,10 +5,10 @@ import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { chromium } from "./browser-timing.mjs";
 import { serve } from "./serve.mjs";
-import { tool, run } from "./toolchain.mjs";
+import { tool, run, nativePlayer } from "./toolchain.mjs";
 
 const root = "build/odin-player";
-const executable = resolve(root, "native/player.exe");
+const executable = resolve(root, "native", nativePlayer);
 function native(args, expected = 0) {
   const result = spawnSync(executable, args, { encoding: "utf8", timeout: 15000 });
   if (result.error) {

@@ -127,7 +127,7 @@ transformed draw-stream generation and attachment/output reconstruction.
 
 Relevant implementations are the [cartridge lifecycle](../console-game.odin),
 [mesh submission](../../../runtime/odin/resources/mesh.odin),
-[native backend](../../../runtime/odin/gpu/native/backend_windows.odin), and
+[native backend](../../../runtime/odin/gpu/native/backend.odin), and
 [browser backend](../../../runtime/odin/web/gpu.js).
 Both GPU backends use texture-image redefinition rather than subimage updates.
 This confirms the API calls, not that a particular driver physically allocates

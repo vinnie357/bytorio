@@ -4,7 +4,11 @@ import cartridge "../cartridge"
 import w "../resource_protocol"
 import resources "../resources"
 
-foreign import vorbis {"../../../build/vorbis/native/Release/bytorio-vorbis.lib", "../../../build/vorbis/install/lib/vorbisfile.lib", "../../../build/vorbis/install/lib/vorbis.lib", "../../../build/vorbis/install/lib/ogg.lib"}
+when ODIN_OS == .Windows {
+    foreign import vorbis {"../../../build/vorbis/native/Release/bytorio-vorbis.lib", "../../../build/vorbis/install/lib/vorbisfile.lib", "../../../build/vorbis/install/lib/vorbis.lib", "../../../build/vorbis/install/lib/ogg.lib"}
+} else when ODIN_OS == .Darwin {
+    foreign import vorbis {"../../../build/vorbis/native/libbytorio-vorbis.a", "../../../build/vorbis/install/lib/libvorbisfile.a", "../../../build/vorbis/install/lib/libvorbis.a", "../../../build/vorbis/install/lib/libogg.a"}
+}
 foreign vorbis {
     vorbis_open :: proc "c" (bytes: rawptr, size: i32) -> i32 ---
     vorbis_close :: proc "c" (handle: i32) ---

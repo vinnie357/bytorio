@@ -1,7 +1,15 @@
 import { copyFile, cp, mkdir, readFile, stat, utimes, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { dirname, resolve } from "node:path";
-import { emscriptenRoot, repo } from "./toolchain.mjs";
+import { execFileSync } from "node:child_process";
+import {
+  emscriptenRoot,
+  nativePlayer,
+  repo,
+  sdlBuildRoot,
+  sdlLibraryName,
+  windowsHost,
+} from "./toolchain.mjs";
 
 const webScripts = [
   "player.html",
@@ -33,7 +41,7 @@ const shaders = [
 ];
 const binaries = {
   web: ["runtime.wasm", "runtime-gpu.wasm", "audio.wasm"],
-  native: ["player.exe", "SDL3.dll", "wasmtime.dll"],
+  native: [nativePlayer, sdlLibraryName, ...(windowsHost ? ["wasmtime.dll"] : [])],
 };
 
 function supportFiles(platform) {
@@ -56,10 +64,18 @@ function supportFiles(platform) {
   return [
     ["licenses/vorbis.txt", "vorbis", "libvorbis-1.3.7/COPYING"],
     ["licenses/ogg.txt", "vorbis", "libogg-1.3.5/COPYING"],
-    ["SDL3.dll", "compiler", "vendor/sdl3/SDL3.dll"],
-    ["wasmtime.dll", "dependency", "wasmtime.dll"],
+    ...(windowsHost
+      ? [
+          ["SDL3.dll", "compiler", "vendor/sdl3/SDL3.dll"],
+          ["wasmtime.dll", "dependency", "wasmtime.dll"],
+          ["licenses/sdl3.txt", "compiler", "vendor/sdl3/LICENSE.txt"],
+        ]
+      : [
+          // Wasmtime is linked statically here, so only SDL3 travels beside the player.
+          [sdlLibraryName, "sdl3", `install/lib/${sdlLibraryName}`],
+          ["licenses/sdl3.txt", "sdl3", "SDL3-3.4.2/LICENSE.txt"],
+        ]),
     ["licenses/wasmtime.txt", "dependency", "../LICENSE"],
-    ["licenses/sdl3.txt", "compiler", "vendor/sdl3/LICENSE.txt"],
     ["licenses/odin.txt", "compiler", "LICENSE"],
     ["licenses/opengl.txt", "compiler", "vendor/OpenGL/LICENSE"],
     ["licenses/glad.txt", "compiler", "vendor/OpenGL/LICENSE_glad"],
@@ -85,11 +101,18 @@ async function copyFiles(target, entries) {
 }
 
 // Complete a freshly compiled player with its host scripts and dependency notices.
-export async function stagePlayerSupport({ platform, target, compilerRoot, dependency }) {
+export async function stagePlayerSupport({
+  platform,
+  target,
+  compilerRoot,
+  dependency,
+  sdlRoot = sdlBuildRoot,
+}) {
   const roots = {
     web: resolve(repo, "runtime/odin/web"),
     shaders: resolve(repo, "runtime/odin/gpu"),
     compiler: compilerRoot,
+    sdl3: sdlRoot,
     dependency,
     vorbis: resolve(repo, "build/vorbis"),
     emscripten: emscriptenRoot(),
@@ -107,9 +130,20 @@ export async function stagePlayerSupport({ platform, target, compilerRoot, depen
   await Promise.all(entries.map(([name]) => utimes(resolve(target, name), stagedAt, stagedAt)));
 }
 
+// macOS refuses to load unsigned code that was modified after linking; sign the staged player
+// and its SDL3 library ad hoc so a local export runs. Distribution signing is separate.
+async function adHocSign(target) {
+  if (process.platform !== "darwin") {
+    return;
+  }
+  for (const name of [nativePlayer, sdlLibraryName]) {
+    execFileSync("codesign", ["--force", "--sign", "-", resolve(target, name)], { stdio: "pipe" });
+  }
+}
+
 // Export a built player. Game files, profiles and launcher customization belong
 // to the caller; the player inventory and optional executor belong here.
-export async function exportPlayer({ platform, source, target, luau = false }) {
+export async function exportPlayer({ platform, source, target, luau = false, sign = adHocSign }) {
   if (resolve(source) === resolve(target)) {
     throw new Error("Player export source and target must differ");
   }
@@ -133,6 +167,9 @@ export async function exportPlayer({ platform, source, target, luau = false }) {
   // Preserve additional notices, then let the selected dependencies' notices win.
   await cp(resolve(source, "licenses"), resolve(target, "licenses"), { recursive: true });
   await copyFiles(target, entries);
+  if (platform === "native") {
+    await sign(target);
+  }
   if (executor) {
     await writeFile(resolve(target, "luau-executor.wasm"), executor);
     await writeFile(

@@ -6,7 +6,6 @@ import "base:runtime"
 import "core:crypto/hash"
 import "core:fmt"
 import "core:os"
-import win "core:sys/windows"
 
 Save_State :: struct {
     write_allowed:   bool,
@@ -33,10 +32,8 @@ save_open :: proc(
     }
     directory := os.get_env("BYTORIO_SAVE_DIRECTORY", context.allocator)
     if directory == "" {
-        base := os.get_env("LOCALAPPDATA", context.allocator)
-        defer delete(base)
-        if base == "" { return }
-        directory = fmt.aprintf("%s/Bytorio/saves", base)
+        directory = default_save_directory()
+        if directory == "" { return }
     }
     state.directory = directory
     digest: [32]u8
@@ -74,17 +71,8 @@ save_open :: proc(
                     state.length, state.status, state.unavailable = 0, abi.SAVE_ERROR, true
                     return
                 }
-                from, to :=
-                    win.utf8_to_utf16(temporary, context.allocator),
-                    win.utf8_to_utf16(state.path, context.allocator)
-                defer delete(from)
-                defer delete(to)
-                if from == nil || to == nil {
-                    state.length, state.status, state.unavailable = 0, abi.SAVE_ERROR, true
-                    return
-                }
-                // No replace flag: a concurrent canonical writer always wins.
-                moved := win.MoveFileExW(cstring16(raw_data(from)), cstring16(raw_data(to)), 0)
+                // No replace: a concurrent canonical writer always wins.
+                moved := move_without_replace(temporary, state.path)
                 state.length = 0
                 if !moved && !os.exists(state.path) {
                     state.status, state.unavailable = abi.SAVE_ERROR, true
@@ -121,7 +109,7 @@ save_write_bytes :: proc(state: ^Save_State, bytes: []u8) -> u32 {
        len(bytes) > abi.MAX_SAVE_BYTES ||
        state.unavailable ||
        state.path == "" { return abi.SAVE_ERROR }
-    if os.mkdir_all(state.directory) != nil { state.status = abi.SAVE_ERROR; return state.status }
+    if !ensure_directory(state.directory) { state.status = abi.SAVE_ERROR; return state.status }
     temporary := fmt.aprintf("%s.%d.tmp", state.path, os.get_pid())
     defer delete(temporary)
     // Keep the committed file intact until the complete replacement is ready.

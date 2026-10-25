@@ -6,7 +6,8 @@ import { spawn, spawnSync } from "node:child_process";
 import { createServer } from "node:net";
 import { once } from "node:events";
 import { bundleLuau } from "./sdk/bundle.mjs";
-import { syncEditor } from "./sdk/project.mjs";
+import { nativeExport, syncEditor } from "./sdk/project.mjs";
+import { nativePlayer } from "./toolchain.mjs";
 import { branding } from "./branding.mjs";
 
 // Check failures name the analyzer executable, which carries .exe only on Windows.
@@ -77,11 +78,13 @@ const withModule = original
   .replace(JSON.stringify(branding.starterMessage), "message");
 await writeFile(main, withModule);
 cli(["build", project]);
-if (process.platform !== "win32") {
-  // Off Windows only the browser export exists, and --native fails before building or spawning.
+if (nativeExport) {
+  await access(resolve(project, "build/native", nativePlayer));
+} else {
+  // Only the browser export exists, and --native fails before building or spawning.
   await assert.rejects(access(resolve(project, "build/native")), { code: "ENOENT" });
-  assert.match(cli(["run", project, "--native"], 1).stderr, /Windows x64/);
-  assert.match(cli(["watch", project, "--native"], 1).stderr, /Windows x64/);
+  assert.match(cli(["run", project, "--native"], 1).stderr, /Windows x64 or macOS arm64/);
+  assert.match(cli(["watch", project, "--native"], 1).stderr, /Windows x64 or macOS arm64/);
   cli(["build", project, "--native"]);
 }
 const bundled = await readFile(resolve(project, "build/web/game.luau"), "utf8");

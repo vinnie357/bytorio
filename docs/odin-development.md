@@ -21,10 +21,10 @@ Mise installs Odin `dev-2026-10` revision `84bc3fc` and Wasmtime C API **49.0.3*
 
 `mise run deps:player:native` and `mise run deps:player:web` build one host.
 Playable games own their [nested project tasks](../examples/README.md), such as
-`mise run //examples/rpg:build`. Native currently targets Windows x64. Other
+`mise run //examples/rpg:build`. Native targets Windows x64 and macOS arm64. Other
 native hosts remain unvalidated.
 
-The native player finds `game.wasm` beside its executable, independent of the working directory. Distribute `player.exe`, `game.wasm`, `SDL3.dll`, `wasmtime.dll`, and `licenses/` together. An import-table inspection found only those bundled libraries and Windows system dependencies; a clean-machine packaging test remains outstanding.
+The native player finds `game.wasm` beside its executable, independent of the working directory. Distribute `player.exe`, `game.wasm`, `SDL3.dll`, `wasmtime.dll`, and `licenses/` together on Windows. On macOS, distribute `player`, `game.wasm`, `libSDL3.0.dylib` and `licenses/` together; Wasmtime is static and the export is signed ad hoc, so a downloaded copy still needs notarization to pass Gatekeeper. On Windows, an import-table inspection found only those bundled libraries and Windows system dependencies; a clean-machine packaging test remains outstanding.
 
 Use arrows/WASD or a controller D-pad to move; Space, the controller's south button, or click/tap triggers the sound. Pointer input positions the sprite. Physical controller and touch hardware have not been tested yet. Focus loss pauses updates; native focus regain resumes them.
 

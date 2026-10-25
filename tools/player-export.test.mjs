@@ -4,6 +4,10 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { test } from "node:test";
 import { exportPlayer, stagePlayerSupport } from "./player-export.mjs";
+import { nativePlayer, sdlLibraryName, windowsHost } from "./toolchain.mjs";
+
+// Fixture bytes are not Mach-O, so skip real signing.
+const sign = async () => {};
 
 async function put(root, name, content = name) {
   const path = join(root, name);
@@ -17,6 +21,7 @@ async function fixture(platform) {
   const target = join(root, "target");
   const compilerRoot = join(root, "compiler");
   const dependency = join(root, "wasmtime/lib");
+  const sdlRoot = join(root, "sdl3");
   await put(compilerRoot, "LICENSE");
   if (platform === "native") {
     for (const name of [
@@ -27,16 +32,18 @@ async function fixture(platform) {
     ]) {
       await put(compilerRoot, name);
     }
+    await put(sdlRoot, "install/lib/libSDL3.0.dylib");
+    await put(sdlRoot, "SDL3-3.4.2/LICENSE.txt");
     await put(dependency, "wasmtime.dll");
     await put(dependency, "../LICENSE");
-    await put(source, "player.exe");
+    await put(source, nativePlayer);
   } else {
     for (const name of ["runtime.wasm", "runtime-gpu.wasm", "audio.wasm"]) {
       await put(source, name);
     }
   }
-  await stagePlayerSupport({ platform, target: source, compilerRoot, dependency });
-  return { platform, source, target };
+  await stagePlayerSupport({ platform, target: source, compilerRoot, dependency, sdlRoot });
+  return { platform, source, target, sign };
 }
 
 test("browser export contains the dependencies requested by its scripts", async () => {
@@ -80,7 +87,8 @@ test("browser export contains the dependencies requested by its scripts", async 
 test("native export includes the runtime libraries and their notices", async () => {
   const options = await fixture("native");
   await exportPlayer(options);
-  for (const name of ["player.exe", "SDL3.dll", "wasmtime.dll"]) {
+  const binaries = [nativePlayer, sdlLibraryName, ...(windowsHost ? ["wasmtime.dll"] : [])];
+  for (const name of binaries) {
     assert.deepEqual(
       await readFile(join(options.target, name)),
       await readFile(join(options.source, name)),
