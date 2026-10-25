@@ -10,8 +10,14 @@ function stub({ pressed = [], axes = [0, 0, 0, 0], mapping = "standard", connect
 }
 
 test("no pad reads as zero", () => {
-  assert.equal(gamepadButtons(() => []), 0);
-  assert.equal(gamepadButtons(() => [null]), 0);
+  assert.equal(
+    gamepadButtons(() => []),
+    0,
+  );
+  assert.equal(
+    gamepadButtons(() => [null]),
+    0,
+  );
   assert.equal(gamepadButtons(stub({ connected: false })), 0);
   assert.equal(gamepadButtons(stub({ pressed: [0], mapping: "" })), 0);
 });
@@ -37,8 +43,14 @@ test("the left stick maps past the deadzone and rests inside it", () => {
   const left = (1 | controls.BUTTON_MOVE_LEFT) >>> 0;
   const down = (8 | controls.BUTTON_MOVE_DOWN) >>> 0;
   assert.equal(gamepadButtons(stub({ axes: [-0.9, 0, 0, 0] })), left);
-  assert.equal(gamepadButtons(stub({ axes: [0.9, 0, 0, 0] })), (2 | controls.BUTTON_MOVE_RIGHT) >>> 0);
-  assert.equal(gamepadButtons(stub({ axes: [0, -0.9, 0, 0] })), (4 | controls.BUTTON_MOVE_UP) >>> 0);
+  assert.equal(
+    gamepadButtons(stub({ axes: [0.9, 0, 0, 0] })),
+    (2 | controls.BUTTON_MOVE_RIGHT) >>> 0,
+  );
+  assert.equal(
+    gamepadButtons(stub({ axes: [0, -0.9, 0, 0] })),
+    (4 | controls.BUTTON_MOVE_UP) >>> 0,
+  );
   assert.equal(gamepadButtons(stub({ axes: [-0.9, 0.9, 0, 0] })), (left | down) >>> 0);
   assert.equal(gamepadButtons(stub({ axes: [0.3, -0.3, 0, 0] })), 0);
   assert.equal(gamepadButtons(stub({ axes: [0, 0, -0.9, 0.9] })), 0, "the right stick is ignored");
