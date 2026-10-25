@@ -202,21 +202,22 @@ async function prepare(path) {
   }
   return { ...spec, generated };
 }
-// The native player targets Windows x64; other verified hosts build only the browser export.
-export const nativeExport = process.platform === "win32";
-// Hosts where the browser-only build has been run and checked. Others fail rather than guess.
-const browserOnlyHosts = ["darwin"];
-// Verifiers that run the native player call this first, so they fail clearly off Windows.
+// The native player targets Windows x64 and macOS arm64. Other hosts are unverified and fail
+// rather than guess.
+export const nativeExport =
+  process.platform === "win32" || (process.platform === "darwin" && process.arch === "arm64");
+export const nativeHostNote = "Windows x64 or macOS arm64";
+// Verifiers that run the native player call this first, so they fail clearly elsewhere.
 export function requireNativePlayer() {
   if (!nativeExport) {
-    throw new Error("native player is built only on Windows x64");
+    throw new Error(`native player is built only on ${nativeHostNote}`);
   }
 }
 function requireVerifiedHost() {
-  if (!nativeExport && !browserOnlyHosts.includes(process.platform)) {
+  if (!nativeExport) {
     throw new Error(
-      `Host ${process.platform} is unverified: builds are supported on win32 (native and web) and ` +
-        `${browserOnlyHosts.join(", ")} (web only)`,
+      `Host ${process.platform}-${process.arch} is unverified: builds are supported on ${nativeHostNote} ` +
+        "(native and web)",
     );
   }
 }

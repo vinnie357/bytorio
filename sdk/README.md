@@ -75,8 +75,8 @@ The command is `byt`; the package is named `bytorio`.
 
 For Odin, create with `new my-game --language odin`. Projects are ordinary folders;
 they may live outside this repository. The `new` command refuses existing folders.
-The current source toolchain supports **Windows x64** native development and browser builds
-from Windows, using the repository's pinned Odin, Wasmtime and Emscripten toolchains.
+The current source toolchain supports **Windows x64** and **macOS arm64** native development and browser builds
+from those hosts, using the repository's pinned Odin, Wasmtime and Emscripten toolchains.
 See [source setup](../docs/getting-started.md#install-the-development-tools).
 Odin-only SDK projects
 do not build the Luau executor. For Luau projects, `check` uses the prebuilt Luau

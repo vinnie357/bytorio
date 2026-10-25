@@ -9,7 +9,7 @@ import { createProject, buildProject, checkProject, nativeExport } from "./sdk/p
 import { bundleLuau } from "./sdk/bundle.mjs";
 import { graphicsPacket } from "./sdk/assets.mjs";
 import { serve } from "./serve.mjs";
-import { tool, run } from "./toolchain.mjs";
+import { nativePlayer, tool, run } from "./toolchain.mjs";
 import {
   loadSource,
   checkExecutor,
@@ -18,7 +18,9 @@ import {
   rasterizeDrawing,
 } from "../runtime/odin/web/policy.js";
 if (!nativeExport) {
-  console.log("Native player checks skipped: the native player is built only on Windows x64.");
+  console.log(
+    "Native player checks skipped: the native player is built only on Windows x64 and macOS arm64.",
+  );
 }
 const parity = nativeExport ? "native/browser" : "browser-only";
 const contract = JSON.parse(await readFile("sdk/contract.json", "utf8"));
@@ -178,7 +180,7 @@ for (const language of ["odin", "luau"]) {
   checkExecutor(p.game);
   assert.equal(draw(p).sounds, 1, "reload resets sound events");
   assert.equal(draw(p).width, 640, "reload resets display");
-  // The native player builds only on Windows x64; other hosts verify the browser export.
+  // Hosts without a native player verify the browser export only.
   if (nativeExport) {
     // Versioned native replay exercises the same pointer and unsigned high-bit inputs.
     const nativeInputs = resolve(root, `${language}.inputs`);
@@ -199,14 +201,14 @@ for (const language of ["odin", "luau"]) {
       language === "luau"
         ? ["--game", resolve(base, "luau-executor.wasm"), "--source", resolve(base, "game.luau")]
         : [];
-    const result = spawnSync(resolve(base, "player.exe"), [...flags, "--replay", nativeInputs], {
+    const result = spawnSync(resolve(base, nativePlayer), [...flags, "--replay", nativeInputs], {
       encoding: "utf8",
       timeout: 30000,
       cwd: base,
     });
     assert.equal(result.status, 0, result.stderr);
     assert.deepEqual(result.stdout.trim().split(/\r?\n/).map(JSON.parse), nativeExpected);
-    const smoke = spawnSync(resolve(base, "player.exe"), [...flags, "--smoke"], {
+    const smoke = spawnSync(resolve(base, nativePlayer), [...flags, "--smoke"], {
       encoding: "utf8",
       timeout: 30000,
       cwd: base,

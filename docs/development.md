@@ -11,14 +11,15 @@ root CMake build have been removed; historical implementations remain in Git.
 ## Prerequisites
 
 Use [mise](https://mise.jdx.dev/) 2026.10.8 or newer and the pinned toolchain in
-`.mise/toolchain.toml`, included by `mise.toml`. The SDK CLI currently targets Windows
-x64 development. macOS arm64 supports browser export and authoring; the native player remains
-Windows x64 only, and Linux is unverified. Players need neither a compiler nor Node.js to run.
+`.mise/toolchain.toml`, included by `mise.toml`. The SDK CLI targets Windows
+x64 and macOS arm64 development, each with a native player and a browser export. Linux is
+unverified. Players need neither a compiler nor Node.js to run.
 
 Mise installs Node.js, Odin (including SDL), the Wasmtime C API, odinfmt from OLS,
 StyLua, and the prebuilt Luau analyzer. It also installs CMake, Ninja and
 Emscripten 6.0.12. Native builds require the Windows linker prerequisites from
-Odin's installation guide. Emscripten builds the C++ Luau compiler/VM and its
+Odin's installation guide, or the Xcode command line tools on macOS. On macOS, `deps:sdl3:native`
+builds the pinned SDL3 from source and the player links Wasmtime statically. Emscripten builds the C++ Luau compiler/VM and its
 adapter into `luau-executor.wasm`; the Odin player runs this same module on both
 hosts. The executor uses pinned Luau sources under
 `build/luau-executor/_deps/luau-src`; the analyzer matches Luau 0.743.

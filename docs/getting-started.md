@@ -13,7 +13,7 @@ The **Windows x64 CLI preview** is available as a single download. It creates
 Luau and Odin projects and downloads versioned SDK bundles without Node, Bun,
 mise or a source checkout. **It cannot build, check, run or pack games yet.**
 For a playable game, continue with the source setup below, which currently
-requires Windows x64 even for browser exports. macOS and Linux authoring
+requires Windows x64 or macOS arm64, for native players and browser exports alike. Linux authoring
 packages and an automatic installer are not available yet.
 
 ## Download the CLI preview
