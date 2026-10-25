@@ -74,7 +74,11 @@ native_gamepad_mapping :: proc(t: ^testing.T) {
     tilt(joystick, 0, 30000)
     testing.expect_value(t, gamepad_buttons(pad), 8 | abi.BUTTON_MOVE_DOWN)
     tilt(joystick, -30000, 30000)
-    testing.expect_value(t, gamepad_buttons(pad), 1 | abi.BUTTON_MOVE_LEFT | 8 | abi.BUTTON_MOVE_DOWN)
+    testing.expect_value(
+        t,
+        gamepad_buttons(pad),
+        1 | abi.BUTTON_MOVE_LEFT | 8 | abi.BUTTON_MOVE_DOWN,
+    )
     tilt(joystick, 10000, -10000)
     testing.expect_value(t, gamepad_buttons(pad), 0)
 }
