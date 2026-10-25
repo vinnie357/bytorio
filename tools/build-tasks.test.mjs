@@ -179,9 +179,9 @@ function fixture() {
     "tests/odin/fixtures/main.odin",
     "examples/hello/odin/main.odin",
     "tests/3d/renderer_test.odin",
-    "tests/resources/player/main_windows.odin",
-    "tests/graphics/player/main_windows.odin",
-    "tests/audio/player/main_windows.odin",
+    "tests/resources/player/main.odin",
+    "tests/graphics/player/main.odin",
+    "tests/audio/player/main.odin",
   ]) {
     put(root, file, "fixture\n");
   }
@@ -238,7 +238,7 @@ test("mise rebuilds only the artifacts affected by edits and missing outputs", a
   assert.deepEqual(run(...targets), ["deps:player:web-cpu", "deps:player:web-gpu"]);
   unlinkSync(resolve(root, "runtime/odin/web/new_module.odin"));
   assert.deepEqual(run(...targets), ["deps:player:web-cpu", "deps:player:web-gpu"]);
-  await edit("tests/graphics/player/main_windows.odin", ["deps:trace:graphics"]);
+  await edit("tests/graphics/player/main.odin", ["deps:trace:graphics"]);
   await edit("runtime/odin/resources/resources.odin", [
     "deps:player:web-cpu",
     "deps:player:web-gpu",
