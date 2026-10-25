@@ -499,7 +499,8 @@ run :: proc() -> int {
     }
     if len(source) > 0 && !no_executor_cache && cache_config == "" {
         directory := fmt.tprintf("%sexecutor-cache", base)
-        if os.make_directory_all(directory) != nil {
+        made := os.make_directory_all(directory)
+        if made != nil && made != .Exist {
 
             return error("cannot create executor cache directory")
         }

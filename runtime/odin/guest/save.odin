@@ -6,7 +6,6 @@ import "base:runtime"
 import "core:crypto/hash"
 import "core:fmt"
 import "core:os"
-import win "core:sys/windows"
 
 Save_State :: struct {
     write_allowed:   bool,
@@ -74,17 +73,8 @@ save_open :: proc(
                     state.length, state.status, state.unavailable = 0, abi.SAVE_ERROR, true
                     return
                 }
-                from, to :=
-                    win.utf8_to_utf16(temporary, context.allocator),
-                    win.utf8_to_utf16(state.path, context.allocator)
-                defer delete(from)
-                defer delete(to)
-                if from == nil || to == nil {
-                    state.length, state.status, state.unavailable = 0, abi.SAVE_ERROR, true
-                    return
-                }
-                // No replace flag: a concurrent canonical writer always wins.
-                moved := win.MoveFileExW(cstring16(raw_data(from)), cstring16(raw_data(to)), 0)
+                // No replace: a concurrent canonical writer always wins.
+                moved := move_without_replace(temporary, state.path)
                 state.length = 0
                 if !moved && !os.exists(state.path) {
                     state.status, state.unavailable = abi.SAVE_ERROR, true

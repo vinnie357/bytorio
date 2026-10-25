@@ -171,7 +171,7 @@ function fixture() {
     "runtime/odin/web/constants.js",
     "runtime/odin/web/main.odin",
     "runtime/odin/resources/resources.odin",
-    "runtime/odin/native/main_windows.odin",
+    "runtime/odin/native/main.odin",
     "runtime/odin/gpu/mesh.frag",
     "runtime/odin/abi/abi.odin",
     "tests/odin/fixtures/main.odin",
@@ -231,7 +231,7 @@ test("mise rebuilds only the artifacts affected by edits and missing outputs", a
   await edit("tests/odin/fixtures/main.odin", ["deps:player:fixtures"]);
   await edit("examples/hello/odin/main.odin", ["deps:player:hello"]);
   await edit("runtime/odin/web/main.odin", ["deps:player:web-cpu", "deps:player:web-gpu"]);
-  await edit("runtime/odin/native/main_windows.odin", ["deps:player:native-binary"]);
+  await edit("runtime/odin/native/main.odin", ["deps:player:native-binary"]);
   put(root, "runtime/odin/web/new_module.odin", "package web\n");
   assert.deepEqual(run(...targets), ["deps:player:web-cpu", "deps:player:web-gpu"]);
   unlinkSync(resolve(root, "runtime/odin/web/new_module.odin"));
