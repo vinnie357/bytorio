@@ -169,7 +169,7 @@ run = ["node --test tools/text-input.test.mjs", "node tools/verify-text-input.mj
 
 [tasks."test:extract"]
 description = "Verify archives extract atomically and half-extracted folders are rebuilt"
-run = "node --test tools/extract-archive.test.mjs"
+run = "node --test tools/extract-archive.test.mjs tools/directory-lock.test.mjs"
 
 [tasks."test:gamepad"]
 description = "Verify native and browser gamepad mapping against a virtual SDL3 pad and a stubbed Gamepad API"

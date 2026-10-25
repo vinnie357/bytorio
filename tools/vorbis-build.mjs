@@ -1,7 +1,9 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { createHash } from "node:crypto";
+import { acquireLock } from "./directory-lock.mjs";
+import { extractArchive } from "./extract-archive.mjs";
 import { repo, run, tool } from "./toolchain.mjs";
 import { resourceSchema as limits } from "../runtime/odin/web/constants.js";
 
@@ -13,6 +15,8 @@ const root = resolve(repo, "build/vorbis");
 const prefix = resolve(root, "install");
 const bridge = resolve(repo, "runtime/vorbis");
 await mkdir(root, { recursive: true });
+// Parallel gates run this script at once; the CMake build folders and install prefix are shared.
+await acquireLock(resolve(root, ".lock"));
 
 // The Windows native player links this bridge; it needs the libraries installed by the default build.
 if (process.argv.includes("--bridge")) {
@@ -49,7 +53,10 @@ for (const [name, version, hash] of [
     if (!response.ok) {
       throw new Error(`Vorbis download failed: ${response.status}`);
     }
-    await writeFile(archive, Buffer.from(await response.arrayBuffer()));
+    // Write beside the target and rename, so an interrupted download never looks complete.
+    const partial = `${archive}.${process.pid}.part`;
+    await writeFile(partial, Buffer.from(await response.arrayBuffer()));
+    await rename(partial, archive);
   }
   if (
     createHash("sha256")
@@ -59,9 +66,7 @@ for (const [name, version, hash] of [
     throw new Error(`Invalid ${name} archive hash`);
   }
   const source = resolve(root, `${name}-${version}`);
-  if (!existsSync(source)) {
-    run("tar", ["-xf", archive, "-C", root]);
-  }
+  await extractArchive({ archive, directory: source });
   const build = resolve(root, `${name}-native`);
   run(tool("cmake"), [
     "-S",
