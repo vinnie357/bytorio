@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { test } from "node:test";
@@ -34,6 +34,22 @@ test("a lock held by a live process times out the waiter", () => {
   const lock = join(mkdtempSync(join(tmpdir(), "directory-lock-")), ".lock");
   mkdirSync(lock);
   writeFileSync(join(lock, "pid"), String(process.pid));
+  const result = hold(lock, 600);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Timed out/);
+});
+
+test("a lock folder with no pid is taken over once it is a few seconds old", () => {
+  const lock = join(mkdtempSync(join(tmpdir(), "directory-lock-")), ".lock");
+  mkdirSync(lock);
+  const old = new Date(Date.now() - 60000);
+  utimesSync(lock, old, old);
+  assert.match(hold(lock, 3000).stdout, /held/);
+});
+
+test("a fresh lock folder with no pid is still respected", () => {
+  const lock = join(mkdtempSync(join(tmpdir(), "directory-lock-")), ".lock");
+  mkdirSync(lock);
   const result = hold(lock, 600);
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /Timed out/);
