@@ -1,4 +1,4 @@
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { rmSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -11,6 +11,15 @@ function alive(pid) {
   } catch (error) {
     return error.code === "EPERM";
   }
+}
+
+// A lock folder holds a pid only after its owner wrote it. One without a pid is either being
+// created right now or left by a process that died in between, so it counts as abandoned once it
+// is a few seconds old.
+const graceMs = 5000;
+async function abandoned(directory) {
+  const { mtimeMs } = await stat(directory).catch(() => ({ mtimeMs: Date.now() }));
+  return Date.now() - mtimeMs > graceMs;
 }
 
 // Serializes scripts that share a build folder. `mkdir` is atomic, so exactly one caller creates
@@ -30,8 +39,7 @@ export async function acquireLock(directory, { timeoutMs = 600000 } = {}) {
       }
     }
     const owner = Number(await readFile(resolve(directory, "pid"), "utf8").catch(() => 0));
-    // A folder without a pid is a lock being created or abandoned before it was written.
-    if (owner && !alive(owner)) {
+    if (owner ? !alive(owner) : await abandoned(directory)) {
       await rm(directory, { recursive: true, force: true });
     } else if (Date.now() - started > timeoutMs) {
       throw new Error(`Timed out waiting for ${directory}`);
