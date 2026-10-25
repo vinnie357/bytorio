@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile, writeFile, mkdir, unlink } from "node:fs/promises";
+import { access, readFile, writeFile, mkdir, unlink } from "node:fs/promises";
 import { resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
@@ -8,6 +8,9 @@ import { once } from "node:events";
 import { bundleLuau } from "./sdk/bundle.mjs";
 import { syncEditor } from "./sdk/project.mjs";
 import { branding } from "./branding.mjs";
+
+// Check failures name the analyzer executable, which carries .exe only on Windows.
+const analyzer = process.platform === "win32" ? "luau-analyze.exe" : "luau-analyze";
 const root = resolve("build/sdk-cli-verification", randomUUID());
 await mkdir(root, { recursive: true });
 const project = resolve(root, "game");
@@ -74,6 +77,13 @@ const withModule = original
   .replace(JSON.stringify(branding.starterMessage), "message");
 await writeFile(main, withModule);
 cli(["build", project]);
+if (process.platform !== "win32") {
+  // Off Windows only the browser export exists, and --native fails before building or spawning.
+  await assert.rejects(access(resolve(project, "build/native")), { code: "ENOENT" });
+  assert.match(cli(["run", project, "--native"], 1).stderr, /Windows x64/);
+  assert.match(cli(["watch", project, "--native"], 1).stderr, /Windows x64/);
+  cli(["build", project, "--native"]);
+}
 const bundled = await readFile(resolve(project, "build/web/game.luau"), "utf8");
 assert.ok(
   bundled.includes('[=[require("also-not-an-import")]=]'),
@@ -134,7 +144,7 @@ try {
   const changed = await (await fetch(url)).text();
   assert.notEqual(changed, bundled, "watch rebuilds a required module");
   await writeFile(main, original.replace("local game:", 'byt.button("jump")\nlocal game:'));
-  await waitFor("luau-analyze.exe failed");
+  await waitFor(`${analyzer} failed`);
   assert.equal(
     await (await fetch(url)).text(),
     changed,

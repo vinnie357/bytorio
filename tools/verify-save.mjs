@@ -4,11 +4,12 @@ import { resolve } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import { once } from "node:events";
 import { timedSpawnSync as spawnSync } from "./command-timing.mjs";
-import { createProject, buildProject } from "./sdk/project.mjs";
+import { createProject, buildProject, requireNativePlayer } from "./sdk/project.mjs";
 import { chromium } from "./browser-timing.mjs";
 import { chunks, chunk, encodeSaveIdentity, encodeContent } from "./sdk/cartridge.mjs";
 import { decodeCartridge } from "../runtime/odin/web/cartridge.js";
 import { serve } from "./serve.mjs";
+requireNativePlayer();
 
 const root = resolve("build/save-verification", randomUUID());
 await mkdir(root, { recursive: true });

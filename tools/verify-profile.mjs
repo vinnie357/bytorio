@@ -6,11 +6,12 @@ import { spawnSync } from "node:child_process";
 import { once } from "node:events";
 import { chromium } from "./browser-timing.mjs";
 import { buildResourceExamples } from "../examples/resources/tools/build.mjs";
-import { manifest } from "./sdk/project.mjs";
+import { manifest, requireNativePlayer } from "./sdk/project.mjs";
 import { chunks, chunk } from "./sdk/cartridge.mjs";
 import { negotiateProfile } from "../runtime/odin/web/policy.js";
 import { resourceSchema, RESOURCE_EXPORTS } from "../runtime/odin/web/constants.js";
 import { serve } from "./serve.mjs";
+requireNativePlayer();
 
 const root = resolve("build/profile-verification", randomUUID());
 await mkdir(root, { recursive: true });

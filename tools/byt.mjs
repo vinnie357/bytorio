@@ -2,7 +2,13 @@
 import { resolve } from "node:path";
 import { spawn } from "node:child_process";
 import { watch } from "node:fs";
-import { createProject, checkProject, buildProject, packProject } from "./sdk/project.mjs";
+import {
+  createProject,
+  checkProject,
+  buildProject,
+  packProject,
+  nativeExport,
+} from "./sdk/project.mjs";
 import { serve } from "./serve.mjs";
 import { parseFrameRate } from "../runtime/odin/web/frame-clock.js";
 import { branding } from "./branding.mjs";
@@ -42,6 +48,9 @@ try {
     }
     if (options.web && options.native) {
       throw new Error("Choose --web or --native");
+    }
+    if (options.native && (action === "run" || action === "watch") && !nativeExport) {
+      throw new Error("--native needs the Windows x64 player; use --web on this host");
     }
     if (options.fps !== undefined) {
       parseFrameRate(options.fps);

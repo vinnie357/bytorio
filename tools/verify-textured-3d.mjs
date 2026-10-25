@@ -4,7 +4,7 @@ import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { relative, resolve } from "node:path";
 import { chromium } from "./browser-timing.mjs";
-import { createProject, buildProject } from "./sdk/project.mjs";
+import { createProject, buildProject, requireNativePlayer } from "./sdk/project.mjs";
 import {
   configureResources,
   submitResources,
@@ -24,6 +24,7 @@ import { run, task, dependencyRoot } from "./toolchain.mjs";
 import { odinUnitTests } from "./odin-unit-tests.mjs";
 import { serve } from "./serve.mjs";
 import { buildTexturedDrawing } from "./build-textured-3d.mjs";
+requireNativePlayer();
 
 const root = resolve("build/textured-3d-verification", randomUUID());
 const profile = JSON.parse(await readFile("sdk/profiles/textured-3d-preview-1.json"));

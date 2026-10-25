@@ -1,7 +1,7 @@
 # Reuse only compiled harnesses. Every verifier still runs all tests and replays.
 
 ["deps:trace:resources"]
-depends = ["deps:vorbis"]
+depends = ["deps:vorbis:native"]
 sources = [
   "runtime/odin/cartridge/**/*.odin",
   "runtime/odin/abi/**/*.odin",
@@ -20,7 +20,7 @@ outputs = ["build/validation-tools/resources/trace.exe"]
 run = "node tools/build-trace.mjs resources"
 
 ["deps:trace:graphics"]
-depends = ["deps:vorbis"]
+depends = ["deps:vorbis:native"]
 sources = [
   "runtime/odin/cartridge/**/*.odin",
   "runtime/odin/abi/**/*.odin",
@@ -39,7 +39,7 @@ outputs = ["build/validation-tools/graphics/trace.exe"]
 run = "node tools/build-trace.mjs graphics"
 
 ["deps:trace:audio"]
-depends = ["deps:vorbis"]
+depends = ["deps:vorbis:native"]
 sources = [
   "runtime/odin/cartridge/**/*.odin",
   "runtime/odin/abi/**/*.odin",

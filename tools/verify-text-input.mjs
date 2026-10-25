@@ -6,9 +6,10 @@ import { once } from "node:events";
 import { timedSpawnSync as spawnSync } from "./command-timing.mjs";
 import { tool, dependencyRoot } from "./toolchain.mjs";
 import { odinUnitTests } from "./odin-unit-tests.mjs";
-import { createProject, buildProject } from "./sdk/project.mjs";
+import { createProject, buildProject, requireNativePlayer } from "./sdk/project.mjs";
 import { chromium } from "./browser-timing.mjs";
 import { serve } from "./serve.mjs";
+requireNativePlayer();
 
 const root = resolve("build/text-input-verification", randomUUID());
 await mkdir(root, { recursive: true });

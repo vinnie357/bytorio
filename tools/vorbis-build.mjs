@@ -5,9 +5,36 @@ import { createHash } from "node:crypto";
 import { repo, run, tool } from "./toolchain.mjs";
 import { resourceSchema as limits } from "../runtime/odin/web/constants.js";
 
+// The Windows host is assumed to use a Visual Studio generator, which takes a platform (-A) and an
+// MSVC runtime. A Windows build with CMAKE_GENERATOR=Ninja would still get these flags.
+const msvcFlags =
+  process.platform === "win32" ? ["-A", "x64", "-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded"] : [];
 const root = resolve(repo, "build/vorbis");
 const prefix = resolve(root, "install");
+const bridge = resolve(repo, "runtime/vorbis");
 await mkdir(root, { recursive: true });
+
+// The Windows native player links this bridge; it needs the libraries installed by the default build.
+if (process.argv.includes("--bridge")) {
+  run(tool("cmake"), [
+    "-S",
+    bridge,
+    "-B",
+    resolve(root, "native"),
+    ...msvcFlags,
+    `-DCMAKE_PREFIX_PATH=${prefix}`,
+  ]);
+  run(tool("cmake"), [
+    "--build",
+    resolve(root, "native"),
+    "--config",
+    "Release",
+    "--parallel",
+    "4",
+  ]);
+  console.log("Built native Vorbis bridge.");
+  process.exit(0);
+}
 for (const [name, version, hash] of [
   ["libogg", "1.3.5", "c4d91be36fc8e54deae7575241e03f4211eb102afb3fc0775fbbc1b740016705"],
   ["libvorbis", "1.3.7", "b33cc4934322bcbf6efcbacf49e3ca01aadbea4114ec9589d1b1e9d20f72954b"],
@@ -40,11 +67,9 @@ for (const [name, version, hash] of [
     source,
     "-B",
     build,
-    "-A",
-    "x64",
+    ...msvcFlags,
     "-DCMAKE_POLICY_VERSION_MINIMUM=3.5",
     "-DCMAKE_POLICY_DEFAULT_CMP0091=NEW",
-    "-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded",
     `-DCMAKE_INSTALL_PREFIX=${prefix}`,
     `-DCMAKE_PREFIX_PATH=${prefix}`,
     "-DBUILD_TESTING=OFF",
@@ -61,18 +86,6 @@ for (const [name, version, hash] of [
     "4",
   ]);
 }
-const bridge = resolve(repo, "runtime/vorbis");
-run(tool("cmake"), [
-  "-S",
-  bridge,
-  "-B",
-  resolve(root, "native"),
-  "-A",
-  "x64",
-  `-DCMAKE_PREFIX_PATH=${prefix}`,
-  "-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded",
-]);
-run(tool("cmake"), ["--build", resolve(root, "native"), "--config", "Release", "--parallel", "4"]);
 const sources = [
   "mdct",
   "smallft",
@@ -116,4 +129,4 @@ run(tool("emcc"), [
   "-o",
   resolve(root, "vorbis.js"),
 ]);
-console.log("Built native and browser Vorbis decoder adapters.");
+console.log("Built browser Vorbis decoder adapter.");

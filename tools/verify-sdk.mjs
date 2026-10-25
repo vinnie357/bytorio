@@ -5,7 +5,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { once } from "node:events";
 import { chromium } from "./browser-timing.mjs";
-import { createProject, buildProject, checkProject } from "./sdk/project.mjs";
+import { createProject, buildProject, checkProject, nativeExport } from "./sdk/project.mjs";
 import { bundleLuau } from "./sdk/bundle.mjs";
 import { graphicsPacket } from "./sdk/assets.mjs";
 import { serve } from "./serve.mjs";
@@ -17,6 +17,10 @@ import {
   submitDrawing,
   rasterizeDrawing,
 } from "../runtime/odin/web/policy.js";
+if (!nativeExport) {
+  console.log("Native player checks skipped: the native player is built only on Windows x64.");
+}
+const parity = nativeExport ? "native/browser" : "browser-only";
 const contract = JSON.parse(await readFile("sdk/contract.json", "utf8"));
 const root = resolve("build/sdk-verification", randomUUID());
 await mkdir(root, { recursive: true });
@@ -32,7 +36,7 @@ for (const language of ["luau", "odin"]) {
   await createProject(path, language);
   await copyFile(`tests/sdk/game.${language}`, resolve(path, `src/main.${language}`));
   await buildProject(path);
-  for (const platform of ["web", "native"]) {
+  for (const platform of nativeExport ? ["web", "native"] : ["web"]) {
     const exported = resolve(path, "build", platform);
     if (language === "luau") {
       const executor = await readFile(resolve(exported, "luau-executor.wasm"));
@@ -174,45 +178,48 @@ for (const language of ["odin", "luau"]) {
   checkExecutor(p.game);
   assert.equal(draw(p).sounds, 1, "reload resets sound events");
   assert.equal(draw(p).width, 640, "reload resets display");
-  // Versioned native replay exercises the same pointer and unsigned high-bit inputs.
-  const nativeInputs = resolve(root, `${language}.inputs`);
-  await writeFile(
-    nativeInputs,
-    inputs
-      .map(({ buttons, pointer, x, y }) => `v2:${buttons}:${Number(pointer)}:${x}:${y}`)
-      .join("\n") + "\n",
-  );
-  const replayPair = await pair(language);
-  const nativeExpected = inputs.map((input) => {
-    replayPair.game.game_update(input.buttons, Number(input.pointer), input.x, input.y);
-    const f = draw(replayPair);
-    return { hash: f.hash, sounds: f.sounds };
-  });
-  const base = resolve(paths[language], "build/native");
-  const flags =
-    language === "luau"
-      ? ["--game", resolve(base, "luau-executor.wasm"), "--source", resolve(base, "game.luau")]
-      : [];
-  const result = spawnSync(resolve(base, "player.exe"), [...flags, "--replay", nativeInputs], {
-    encoding: "utf8",
-    timeout: 30000,
-    cwd: base,
-  });
-  assert.equal(result.status, 0, result.stderr);
-  assert.deepEqual(result.stdout.trim().split(/\r?\n/).map(JSON.parse), nativeExpected);
-  const smoke = spawnSync(resolve(base, "player.exe"), [...flags, "--smoke"], {
-    encoding: "utf8",
-    timeout: 30000,
-    cwd: base,
-    env: {
-      ...process.env,
-      SDL_VIDEODRIVER: "dummy",
-      SDL_AUDIODRIVER: "dummy",
-      SDL_RENDER_DRIVER: "software",
-    },
-  });
-  assert.equal(smoke.status, 0, smoke.stderr);
-  assert.ok(JSON.parse(smoke.stdout).audioQueuedFrames > 0);
+  // The native player builds only on Windows x64; other hosts verify the browser export.
+  if (nativeExport) {
+    // Versioned native replay exercises the same pointer and unsigned high-bit inputs.
+    const nativeInputs = resolve(root, `${language}.inputs`);
+    await writeFile(
+      nativeInputs,
+      inputs
+        .map(({ buttons, pointer, x, y }) => `v2:${buttons}:${Number(pointer)}:${x}:${y}`)
+        .join("\n") + "\n",
+    );
+    const replayPair = await pair(language);
+    const nativeExpected = inputs.map((input) => {
+      replayPair.game.game_update(input.buttons, Number(input.pointer), input.x, input.y);
+      const f = draw(replayPair);
+      return { hash: f.hash, sounds: f.sounds };
+    });
+    const base = resolve(paths[language], "build/native");
+    const flags =
+      language === "luau"
+        ? ["--game", resolve(base, "luau-executor.wasm"), "--source", resolve(base, "game.luau")]
+        : [];
+    const result = spawnSync(resolve(base, "player.exe"), [...flags, "--replay", nativeInputs], {
+      encoding: "utf8",
+      timeout: 30000,
+      cwd: base,
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(result.stdout.trim().split(/\r?\n/).map(JSON.parse), nativeExpected);
+    const smoke = spawnSync(resolve(base, "player.exe"), [...flags, "--smoke"], {
+      encoding: "utf8",
+      timeout: 30000,
+      cwd: base,
+      env: {
+        ...process.env,
+        SDL_VIDEODRIVER: "dummy",
+        SDL_AUDIODRIVER: "dummy",
+        SDL_RENDER_DRIVER: "software",
+      },
+    });
+    assert.equal(smoke.status, 0, smoke.stderr);
+    assert.ok(JSON.parse(smoke.stdout).audioQueuedFrames > 0);
+  }
 }
 const server = serve(root, 0);
 await once(server, "listening");
@@ -429,5 +436,5 @@ await assert.rejects(
   /Missing module|escapes/,
 );
 console.log(
-  "SDK conformance passed: strict authoring, ABI exports, 120-frame native/browser parity, input edges, pointer, random vectors, modes, drawing, audio, reload and validation.",
+  `SDK conformance passed: strict authoring, ABI exports, 120-frame ${parity} parity, input edges, pointer, random vectors, modes, drawing, audio, reload and validation.`,
 );

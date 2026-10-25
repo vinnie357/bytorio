@@ -13,6 +13,8 @@ import { serve } from "./serve.mjs";
 import { negotiateProfile } from "../runtime/odin/web/policy.js";
 import { RESOURCE_EXPORTS } from "../runtime/odin/web/constants.js";
 import { browserEffectProbes } from "./effect-probes.mjs";
+import { requireNativePlayer } from "./sdk/project.mjs";
+requireNativePlayer();
 
 const gpu = process.argv.includes("--gpu");
 const effects = process.argv.includes("--effects");

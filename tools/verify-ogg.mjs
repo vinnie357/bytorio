@@ -2,11 +2,12 @@ import assert from "node:assert/strict";
 import { mkdir, readFile, writeFile, copyFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { once } from "node:events";
-import { createProject, buildProject } from "./sdk/project.mjs";
+import { createProject, buildProject, requireNativePlayer } from "./sdk/project.mjs";
 import { tool, run, task, dependencyRoot } from "./toolchain.mjs";
 import { chromium } from "./browser-timing.mjs";
 import { serve } from "./serve.mjs";
 import { odinUnitTests } from "./odin-unit-tests.mjs";
+requireNativePlayer();
 
 const root = resolve("build/ogg-verification");
 await mkdir(root, { recursive: true });
