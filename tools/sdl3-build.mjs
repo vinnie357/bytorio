@@ -1,7 +1,9 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { createHash } from "node:crypto";
+import { acquireLock } from "./directory-lock.mjs";
+import { extractArchive } from "./extract-archive.mjs";
 import { repo, run, tool } from "./toolchain.mjs";
 
 const root = resolve(repo, "build/sdl3");
@@ -15,6 +17,8 @@ if (process.platform === "win32") {
   console.log("Windows uses the SDL3 vendored with Odin.");
   process.exit(0);
 }
+// Parallel gates run this script at once; CMake cannot share one build folder between them.
+await acquireLock(resolve(root, ".lock"));
 const version = "3.4.2";
 const hash = "ef39a2e3f9a8a78296c40da701967dd1b0d0d6e267e483863ce70f8a03b4050c";
 const prefix = resolve(root, "install");
@@ -28,7 +32,10 @@ if (!existsSync(archive)) {
   if (!response.ok) {
     throw new Error(`SDL3 download failed: ${response.status}`);
   }
-  await writeFile(archive, Buffer.from(await response.arrayBuffer()));
+  // Write beside the target and rename, so an interrupted download never looks complete.
+  const partial = `${archive}.${process.pid}.part`;
+  await writeFile(partial, Buffer.from(await response.arrayBuffer()));
+  await rename(partial, archive);
 }
 if (
   createHash("sha256")
@@ -38,9 +45,7 @@ if (
   throw new Error("Invalid SDL3 archive hash");
 }
 const source = resolve(root, `SDL3-${version}`);
-if (!existsSync(source)) {
-  run("tar", ["-xf", archive, "-C", root]);
-}
+await extractArchive({ archive, directory: source });
 const build = resolve(root, "build");
 run(tool("cmake"), [
   "-S",
