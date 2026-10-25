@@ -1,7 +1,7 @@
 import { copyFile, mkdir } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { MAX_CARTRIDGE_BYTES, resourceSchema as limits } from "../runtime/odin/web/constants.js";
-import { dependencyRoot, repo, run, tool } from "./toolchain.mjs";
+import { dependencyRoot, nativeLinkerFlags, nativePlayer, repo, run, tool } from "./toolchain.mjs";
 
 const artifact = process.argv[2];
 const web = resolve(repo, "build/odin-player/web");
@@ -26,16 +26,6 @@ const hostMemoryBytes = Math.ceil((limits.maxRuntimeBytes + MAX_CARTRIDGE_BYTES)
 
 if (!run(odin, ["version"]).includes("84bc3fc")) {
   throw new Error("Odin dev-2026-10 (84bc3fc) is required");
-}
-
-// Windows links Odin's vendored SDL3.lib. Other hosts link the pinned build under build/sdl3
-// and load it from beside the executable.
-function nativeLinkerFlags() {
-  if (process.platform === "win32") {
-    return [];
-  }
-  const sdl = resolve(repo, "build/sdl3/install/lib");
-  return [`-extra-linker-flags:-L${sdl} -Wl,-rpath,@executable_path`];
 }
 
 async function build(source, flags, output) {
@@ -67,7 +57,7 @@ switch (artifact) {
     await build(
       "runtime/odin/native",
       [...common, `-collection:deps=${dependencyRoot()}`, ...nativeLinkerFlags()],
-      resolve(native, process.platform === "win32" ? "player.exe" : "player"),
+      resolve(native, nativePlayer),
     );
     break;
   case "hello":

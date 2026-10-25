@@ -60,7 +60,7 @@ description = "Build standalone native/browser players and fixtures"
 depends = ["deps:vorbis", "deps:vorbis:native", "deps:sdl3:native"]
 # Skip the nested graph on unchanged builds; tests verify this aggregate contract.
 outputs = [
-  "build/odin-player/native/SDL3.dll",
+  "build/odin-player/native/{% if os() == 'windows' %}SDL3.dll{% else %}libSDL3.0.dylib{% endif %}",
   "build/odin-player/native/game.wasm",
   "build/odin-player/native/licenses/glad.txt",
   "build/odin-player/native/licenses/odin.txt",
@@ -68,7 +68,7 @@ outputs = [
   "build/odin-player/native/licenses/sdl3.txt",
   "build/odin-player/native/licenses/wasmtime.txt",
   "build/odin-player/native/{% if os() == 'windows' %}player.exe{% else %}player{% endif %}",
-  "build/odin-player/native/wasmtime.dll",
+  "build/odin-player/native/{% if os() == 'windows' %}wasmtime.dll{% else %}licenses/wasmtime.txt{% endif %}",
   "build/odin-player/web/audio-worklet.js",
   "build/odin-player/web/audio.wasm",
   "build/odin-player/web/ogg.js",

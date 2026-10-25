@@ -37,3 +37,20 @@ export const emscriptenRoot = () => resolve(toolRoot("vfox:jdx/vfox-emsdk"), "up
 export const script = (file, args = []) =>
   run(process.execPath, [resolve(repo, file), ...args], { stdio: "inherit", timeout: 600000 });
 export const task = (name) => run(mise, ["run", name], { stdio: "inherit", timeout: 600000 });
+
+// Native player naming and libraries. Windows ships Odin's vendored SDL3.dll and links
+// Wasmtime as a DLL. macOS builds SDL3 from source (deps:sdl3:native) and links Wasmtime
+// statically, so only the SDL3 dylib travels beside the executable.
+export const windowsHost = process.platform === "win32";
+export const nativePlayer = windowsHost ? "player.exe" : "player";
+export const sdlLibraryName = windowsHost ? "SDL3.dll" : "libSDL3.0.dylib";
+export const sdlBuildRoot = resolve(repo, "build/sdl3");
+export const sdlLibrary = () =>
+  windowsHost
+    ? resolve(toolRoot("odin"), "vendor/sdl3/SDL3.dll")
+    : resolve(sdlBuildRoot, "install/lib", sdlLibraryName);
+// Extra Odin linker flags that find the SDL3 build and load it from beside the executable.
+export const nativeLinkerFlags = () =>
+  windowsHost
+    ? []
+    : [`-extra-linker-flags:-L${resolve(sdlBuildRoot, "install/lib")} -Wl,-rpath,@executable_path`];

@@ -181,7 +181,7 @@ outputs = [
 run = "node tools/stage-player.mjs web"
 
 ["deps:player:native-support"]
-depends = ["deps:vorbis"]
+depends = ["deps:vorbis", "deps:sdl3:native"]
 sources = [
   "tools/stage-player.mjs",
   "tools/player-export.mjs",
@@ -190,8 +190,9 @@ sources = [
   ".mise/toolchain.toml",
 ]
 outputs = [
-  "build/odin-player/native/SDL3.dll",
-  "build/odin-player/native/wasmtime.dll",
+  "build/odin-player/native/{% if os() == 'windows' %}SDL3.dll{% else %}libSDL3.0.dylib{% endif %}",
+  # Wasmtime is static off Windows; its license stands in so every host declares real files.
+  "build/odin-player/native/{% if os() == 'windows' %}wasmtime.dll{% else %}licenses/wasmtime.txt{% endif %}",
   "build/odin-player/native/licenses/wasmtime.txt",
   "build/odin-player/native/licenses/sdl3.txt",
   "build/odin-player/native/licenses/odin.txt",
