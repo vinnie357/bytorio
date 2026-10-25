@@ -32,10 +32,8 @@ save_open :: proc(
     }
     directory := os.get_env("BYTORIO_SAVE_DIRECTORY", context.allocator)
     if directory == "" {
-        base := os.get_env("LOCALAPPDATA", context.allocator)
-        defer delete(base)
-        if base == "" { return }
-        directory = fmt.aprintf("%s/Bytorio/saves", base)
+        directory = default_save_directory()
+        if directory == "" { return }
     }
     state.directory = directory
     digest: [32]u8
@@ -111,7 +109,7 @@ save_write_bytes :: proc(state: ^Save_State, bytes: []u8) -> u32 {
        len(bytes) > abi.MAX_SAVE_BYTES ||
        state.unavailable ||
        state.path == "" { return abi.SAVE_ERROR }
-    if os.mkdir_all(state.directory) != nil { state.status = abi.SAVE_ERROR; return state.status }
+    if !ensure_directory(state.directory) { state.status = abi.SAVE_ERROR; return state.status }
     temporary := fmt.aprintf("%s.%d.tmp", state.path, os.get_pid())
     defer delete(temporary)
     // Keep the committed file intact until the complete replacement is ready.
