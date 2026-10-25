@@ -1,3 +1,4 @@
+import { nativePlayer, windowsHost } from "./toolchain.mjs";
 import assert from "node:assert/strict";
 import { copyFile, mkdir, readFile, writeFile, readdir, chmod, unlink } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -33,7 +34,7 @@ for (const language of ["odin", "luau"]) {
   async function native(masks, expectedExit = 0, input = cartridge) {
     await writeFile(replay, masks.join("\n"));
     const result = spawnSync(
-      resolve(project, "build/native/player.exe"),
+      resolve(project, "build/native", nativePlayer),
       [input, "--replay", replay],
       {
         encoding: "utf8",
@@ -55,12 +56,17 @@ for (const language of ["odin", "luau"]) {
     expected,
     "maximum-size write owns original staging bytes",
   );
-  await chmod(saved, 0o444);
+  // Windows refuses to replace a read-only file. POSIX rename ignores the target file mode and
+  // checks the directory instead, so the same failure needs a read-only save directory there.
+  const [locked, readOnly, writable] = windowsHost
+    ? [saved, 0o444, 0o666]
+    : [saveDirectory, 0o555, 0o755];
+  await chmod(locked, readOnly);
   try {
     await native([4], 1);
     assert.deepEqual(await readFile(saved), expected, "failed atomic replace retains prior save");
   } finally {
-    await chmod(saved, 0o666);
+    await chmod(locked, writable);
   }
   await native([8, 0, 2]);
   assert.deepEqual(await readFile(saved), expected.subarray(0, 4096));
