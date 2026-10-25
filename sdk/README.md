@@ -174,6 +174,23 @@ and `released` support every named button. `all_buttons()` returns the complete
 mask. These optional controls require the current player; older SDKs continue
 to ignore the extra bits. See the canonical values in `contract.json`.
 
+### Gamepad
+
+Both players read the first connected gamepad (SDL3 natively; the browser's
+standard mapping on the web) and send existing bits, so no cartridge change is
+needed and older SDKs keep working:
+
+| Pad input | Sends |
+| --- | --- |
+| D-pad, left stick past a 40% deadzone | `left/right/up/down` with `move_left/right/up/down` |
+| South (A) | `action` |
+| East (B) | `escape` |
+| Start | `map` |
+| Left and right shoulder | `rotate_left` and `rotate_right` |
+
+The right stick, triggers, West, North and Back are not read. Only the first
+pad counts, and the mask does not say which device produced a bit.
+
 Input version 2 adds `pointer_left`, `pointer_right`, `pointer_hover`,
 `wheel_up/down`, `inventory` (I), `character` (C), `skills` (K), `quest` (Q),
 `map` (Tab), `potion_1` through `potion_4` (1–4), `shift` (either Shift), and
