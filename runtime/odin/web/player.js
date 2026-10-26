@@ -5,6 +5,13 @@ import { normalizeGraphics } from "./gpu.js";
 import * as controls from "./constants.js";
 import { FrameClock, parseFrameRate } from "./frame-clock.js";
 import { gamepadButtons } from "./gamepad.js";
+import {
+  installTouchControls,
+  touchButtons,
+  touchLayout,
+  touchScale,
+  touchShown,
+} from "./touch.js";
 import { createTextInputOverlay } from "./text-input.js";
 const canvas = document.getElementById("canvas");
 const display = canvas.getContext("2d", { alpha: false });
@@ -568,8 +575,7 @@ async function load(restart = false) {
     if (data.memory) {
       globalThis.playerStatus.memory = data.memory;
     }
-    status.textContent =
-      globalThis.playerInstructions || "Arrows / WASD: move · Space / tap: sound";
+    status.textContent = help();
     maybePlay();
     if (autoStart) {
       autoStart = false;
@@ -685,6 +691,7 @@ function input(consumeWheel = true) {
     buttons |= 16;
   }
   buttons |= gamepadButtons();
+  buttons |= touchButtons();
   const hover =
     pointer.hover &&
     pointer.x >= 0 &&
@@ -862,25 +869,48 @@ for (const name of ["pointercancel", "lostpointercapture"]) {
   });
 }
 button.addEventListener("click", () => start().catch((error) => fail(error.message)));
-function resize() {
+// What the page leaves free around the canvas: the touch controls' columns or panel while they are
+// up, otherwise room for the page's own controls (none in fullscreen).
+function reserved() {
   const full = document.fullscreenElement === document.getElementById("screen");
+  const width = globalThis.playerStatus.width || 640,
+    height = globalThis.playerStatus.height || 360;
+  return (
+    touchLayout({ width, height }) ?? (full ? { width: 0, height: 0 } : { width: 32, height: 150 })
+  );
+}
+// The page's own help line: a game's `playerInstructions` win, otherwise the keyboard wording, or
+// the touch wording once the touch controls are up.
+const KEYBOARD_HELP = "Arrows / WASD: move · Space / tap: sound";
+const TOUCH_HELP = "D-pad: move · A: action · B: back · START: map · L / R: rotate";
+function help() {
+  return globalThis.playerInstructions || (touchShown() ? TOUCH_HELP : KEYBOARD_HELP);
+}
+function resize() {
+  const reserve = reserved();
   const density = devicePixelRatio || 1;
   const width = globalThis.playerStatus.width || 640,
     height = globalThis.playerStatus.height || 360;
   const available = Math.min(
-    ((innerWidth - (full ? 0 : 32)) * density) / width,
-    ((innerHeight - (full ? 0 : 150)) * density) / height,
+    ((innerWidth - reserve.width) * density) / width,
+    ((innerHeight - reserve.height) * density) / height,
   );
-  const scale = available >= 1 ? Math.floor(available) : Math.max(0.25, available);
+  // Desktop keeps whole device pixels; the touch layout falls back to an exact fit when they would
+  // leave a phone's screen mostly empty.
+  const scale = touchShown()
+    ? touchScale(available)
+    : available >= 1
+      ? Math.floor(available)
+      : Math.max(0.25, available);
   canvas.style.width = `${(width * scale) / density}px`;
   canvas.style.height = `${(height * scale) / density}px`;
   textInput.reposition();
 }
 function displayPixels() {
-  const full = document.fullscreenElement === document.getElementById("screen");
+  const reserve = reserved();
   return [
-    Math.max(1, Math.floor((innerWidth - (full ? 0 : 32)) * (devicePixelRatio || 1))),
-    Math.max(1, Math.floor((innerHeight - (full ? 0 : 150)) * (devicePixelRatio || 1))),
+    Math.max(1, Math.floor((innerWidth - reserve.width) * (devicePixelRatio || 1))),
+    Math.max(1, Math.floor((innerHeight - reserve.height) * (devicePixelRatio || 1))),
   ];
 }
 document.getElementById("fullscreen").addEventListener("click", () =>
@@ -897,6 +927,23 @@ canvas.addEventListener("contextlost", (event) => {
   fail("Display context lost. Restore the display and restart the game.");
 });
 window.addEventListener("resize", resize);
+installTouchControls({
+  parent: document.getElementById("screen"),
+  // A lifted touch starts or resumes the player exactly as the Start button does, so a landscape
+  // phone that cannot reach that button still plays.
+  onActivate: () => {
+    if (!started && !button.disabled) {
+      start().catch((error) => fail(error.message));
+    }
+  },
+  onFullscreen: () => document.getElementById("fullscreen").click(),
+  onLayout: () => {
+    resize();
+    if ([KEYBOARD_HELP, TOUCH_HELP].includes(status.textContent)) {
+      status.textContent = help();
+    }
+  },
+});
 resize();
 if (graphicsError || timingError) {
   fail(graphicsError || timingError);
