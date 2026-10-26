@@ -129,4 +129,11 @@ test("a real bundle is smaller, keeps its line count, and still compiles and run
   });
   assert.equal(compiled.status, 0, compiled.stderr);
   assert.equal(await readFile(file, "utf8"), stripped);
+  // Comments never reach the bytecode, so the stripped and the plain bundle compile to the same bytes,
+  // line information included.
+  const reference = join(project, "plain.luau");
+  await writeFile(reference, plain);
+  const bytecode = (path) =>
+    spawnSync(tool("luau-compile"), ["--binary", "-g1", path], { maxBuffer: 1 << 28 }).stdout;
+  assert.ok(Buffer.compare(bytecode(file), bytecode(reference)) === 0, "the bytecode differs");
 });
