@@ -54,7 +54,7 @@ const STYLE = `
   #touch-controls [data-touch="dpad"]{left:${MARGIN}px;bottom:${MARGIN}px}
   #touch-controls [data-touch="a"]{right:${MARGIN}px;bottom:${MARGIN}px}
   #touch-controls [data-touch="b"]{right:calc(${MARGIN}px + var(--size) + 12px);bottom:${MARGIN + 36}px}
-  #touch-controls [data-touch="start"]{left:50%;bottom:${MARGIN}px;transform:translateX(-50%)}
+  #touch-controls [data-touch="start"]{left:50%;top:0;transform:translateX(-50%)}
   #touch-controls [data-touch="l"]{left:${MARGIN}px;top:0}
   #touch-controls [data-touch="r"]{right:${MARGIN}px;top:0}
 }`;
