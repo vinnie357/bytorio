@@ -168,6 +168,7 @@ outputs = [
   "build/odin-player/web/executor-cache-core.js",
   "build/odin-player/web/frame-clock.js",
   "build/odin-player/web/gamepad.js",
+  "build/odin-player/web/touch.js",
   "build/odin-player/web/gpu.js",
   "build/odin-player/web/gpu-surface.js",
   "build/odin-player/web/licenses/odin.txt",

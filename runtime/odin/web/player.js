@@ -5,6 +5,7 @@ import { normalizeGraphics } from "./gpu.js";
 import * as controls from "./constants.js";
 import { FrameClock, parseFrameRate } from "./frame-clock.js";
 import { gamepadButtons } from "./gamepad.js";
+import { installTouchControls, touchButtons, touchLayoutReserve } from "./touch.js";
 import { createTextInputOverlay } from "./text-input.js";
 const canvas = document.getElementById("canvas");
 const display = canvas.getContext("2d", { alpha: false });
@@ -685,6 +686,7 @@ function input(consumeWheel = true) {
     buttons |= 16;
   }
   buttons |= gamepadButtons();
+  buttons |= touchButtons();
   const hover =
     pointer.hover &&
     pointer.x >= 0 &&
@@ -864,12 +866,13 @@ for (const name of ["pointercancel", "lostpointercapture"]) {
 button.addEventListener("click", () => start().catch((error) => fail(error.message)));
 function resize() {
   const full = document.fullscreenElement === document.getElementById("screen");
+  const reserve = full ? 0 : (touchLayoutReserve() ?? 150);
   const density = devicePixelRatio || 1;
   const width = globalThis.playerStatus.width || 640,
     height = globalThis.playerStatus.height || 360;
   const available = Math.min(
     ((innerWidth - (full ? 0 : 32)) * density) / width,
-    ((innerHeight - (full ? 0 : 150)) * density) / height,
+    ((innerHeight - reserve) * density) / height,
   );
   const scale = available >= 1 ? Math.floor(available) : Math.max(0.25, available);
   canvas.style.width = `${(width * scale) / density}px`;
@@ -878,9 +881,10 @@ function resize() {
 }
 function displayPixels() {
   const full = document.fullscreenElement === document.getElementById("screen");
+  const reserve = full ? 0 : (touchLayoutReserve() ?? 150);
   return [
     Math.max(1, Math.floor((innerWidth - (full ? 0 : 32)) * (devicePixelRatio || 1))),
-    Math.max(1, Math.floor((innerHeight - (full ? 0 : 150)) * (devicePixelRatio || 1))),
+    Math.max(1, Math.floor((innerHeight - reserve) * (devicePixelRatio || 1))),
   ];
 }
 document.getElementById("fullscreen").addEventListener("click", () =>
@@ -897,6 +901,7 @@ canvas.addEventListener("contextlost", (event) => {
   fail("Display context lost. Restore the display and restart the game.");
 });
 window.addEventListener("resize", resize);
+installTouchControls({ parent: document.getElementById("screen"), onLayout: resize });
 resize();
 if (graphicsError || timingError) {
   fail(graphicsError || timingError);

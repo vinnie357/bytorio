@@ -53,7 +53,7 @@ async function phone(browser, url, viewport) {
   const send = (type, points) =>
     cdp.send("Input.dispatchTouchEvent", {
       type,
-      touchPoints: points.map(([x, y], id) => ({ x, y, id })),
+      touchPoints: points.map(([x, y, id], index) => ({ x, y, id: id ?? index })),
     });
   async function box(name) {
     const rectangle = await page.locator(`[data-touch="${name}"]`).boundingBox();
@@ -120,7 +120,7 @@ test("two touches combine, a slide changes direction and a cancel releases", asy
     assert.equal(await mask(), (LEFT | 16) >>> 0, "d-pad and A together");
     await send("touchMove", [right, a]);
     assert.equal(await mask(), (RIGHT | 16) >>> 0, "sliding across the d-pad changes direction");
-    await send("touchEnd", [right]);
+    await send("touchEnd", [[...a, 1]]);
     assert.equal(await mask(), RIGHT, "lifting A leaves the d-pad held");
     await send("touchCancel", []);
     assert.equal(await mask(), 0, "a cancelled touch releases everything");

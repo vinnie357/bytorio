@@ -191,6 +191,15 @@ needed and older SDKs keep working:
 The right stick, triggers, West, North and Back are not read. Only the first
 pad counts, and the mask does not say which device produced a bit.
 
+### Touch
+
+The web player shows on-screen controls on touch devices (a coarse primary pointer, or after the
+first touch) and sends the same bits as the gamepad table: a d-pad, A (`action`), B (`escape`),
+START (`map`) and L/R (`rotate_left` and `rotate_right`). Controls are at least 44 px. In
+landscape they sit over the page edges and the canvas middle stays clear; in portrait they sit
+below the canvas. Several touches combine, a thumb can slide across the d-pad, and everything
+releases on lift, cancel, blur or when the page is hidden. Desktop pages build no overlay.
+
 Input version 2 adds `pointer_left`, `pointer_right`, `pointer_hover`,
 `wheel_up/down`, `inventory` (I), `character` (C), `skills` (K), `quest` (Q),
 `map` (Tab), `potion_1` through `potion_4` (1–4), `shift` (either Shift), and

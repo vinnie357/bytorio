@@ -25,6 +25,7 @@ const webScripts = [
   "text-session.js",
   "text-input.js",
   "gamepad.js",
+  "touch.js",
   "executor-cache.js",
   "executor-cache-core.js",
   "frame-clock.js",
