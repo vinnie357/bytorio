@@ -92,6 +92,93 @@ function tokens(source) {
   }
   return result;
 }
+// Removes comments and indentation from Luau source and keeps every newline, so a line in the
+// result is the line it came from and a runtime error still reports the source line. Strings,
+// long strings and interpolated strings are copied byte for byte, so comment markers inside them
+// are untouched. Nothing is renamed or reflowed. A profile directive on the very first line is
+// kept, because the host reads it.
+export function stripComments(source) {
+  const length = source.length;
+  let out = "";
+  let i = 0;
+  let atLineStart = true;
+  if (source.startsWith("--!")) {
+    const end = source.indexOf("\n");
+    i = end < 0 ? length : end;
+    out = source.slice(0, i);
+  }
+  const trimEnd = () => {
+    out = out.replace(/[ \t]+$/, "");
+  };
+  while (i < length) {
+    const c = source[i];
+    if (c === "\n") {
+      trimEnd();
+      out += "\n";
+      i++;
+      atLineStart = true;
+      continue;
+    }
+    if (atLineStart && (c === " " || c === "\t")) {
+      i++;
+      continue;
+    }
+    atLineStart = false;
+    if (c === "-" && source[i + 1] === "-") {
+      const long = source.slice(i + 2).match(/^\[(=*)\[/);
+      if (long) {
+        const close = "]" + long[1] + "]";
+        const end = source.indexOf(close, i + 2 + long[0].length);
+        if (end < 0) {
+          throw new Error("Unclosed Luau comment");
+        }
+        out += "\n".repeat(source.slice(i, end).split("\n").length - 1);
+        i = end + close.length;
+        // The code after a block comment keeps one space from what came before it.
+        trimEnd();
+        while (source[i] === " " || source[i] === "\t") {
+          i++;
+        }
+        if (i < length && source[i] !== "\n" && out !== "" && !out.endsWith("\n")) {
+          out += " ";
+        }
+        atLineStart = out === "" || out.endsWith("\n");
+        continue;
+      }
+      const end = source.indexOf("\n", i);
+      i = end < 0 ? length : end;
+      trimEnd();
+      continue;
+    }
+    if (c === '"' || c === "'" || c === "`") {
+      const start = i++;
+      while (i < length && source[i] !== c) {
+        i += source[i] === "\\" ? 2 : 1;
+      }
+      if (i >= length) {
+        throw new Error("Unclosed Luau string");
+      }
+      i++;
+      out += source.slice(start, i);
+      continue;
+    }
+    const long = c === "[" ? source.slice(i).match(/^\[(=*)\[/) : null;
+    if (long) {
+      const close = "]" + long[1] + "]";
+      const end = source.indexOf(close, i + long[0].length);
+      if (end < 0) {
+        throw new Error("Unclosed Luau string");
+      }
+      out += source.slice(i, end + close.length);
+      i = end + close.length;
+      continue;
+    }
+    out += c;
+    i++;
+  }
+  return out;
+}
+
 export async function bundleLuau({
   entry,
   project,
@@ -99,6 +186,7 @@ export async function bundleLuau({
   assets,
   display = [640, 360],
   profile = 1,
+  strip = true,
 }) {
   if (!contract.profiles.some(({ id }) => id === profile)) {
     throw new Error("Unsupported Luau cartridge profile");
@@ -208,9 +296,12 @@ export async function bundleLuau({
   output.push(
     `local __sdk=__require(${JSON.stringify(sdkId)})\n__sdk.assets(${JSON.stringify(assets.toString("base64"))})\nreturn __sdk._wrap(__require(${JSON.stringify(mainId)}),${display[0]},${display[1]})\n`,
   );
+  // Comments cost cartridge bytes and the player never reads them; the sources keep theirs.
+  // Stripping runs after formatting, so the formatter's layout is the layout the lines keep.
+  const formatted = formatSource(output.join("\n"), "game.luau");
   const bytes = Buffer.from(
     (profile !== 1 ? `--!console-profile=${profile}\n` : "") +
-      formatSource(output.join("\n"), "game.luau"),
+      (strip ? stripComments(formatted) : formatted),
     "utf8",
   );
   if (bytes.length > 256 * 1024) {

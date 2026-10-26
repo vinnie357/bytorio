@@ -92,7 +92,7 @@ payload are **little-endian**, independently of the surrounding PNG envelope.
 Exactly the title bytes, then code bytes, follow the header. No padding, extra
 entries, external paths or optional executor are allowed. The title is valid
 UTF-8 without ASCII controls or DEL. Luau code is UTF-8, at most 256 KiB. Odin code
-is a Wasm version-1 module, at most 1 MiB. Neither code section is compressed.
+is a Wasm version-1 module, at most 1 MiB. Neither code section is compressed. The SDK bundler strips comments and indentation from Luau (every newline stays, so line numbers match the formatted bundle, and nothing is renamed), so source comments do not count against the 256 KiB.
 Sprites and fonts are already embedded by the SDK. Both players check the
 cartridge SDK/ABI/profile before initialization and initial display afterward, and retain the
 existing guest memory, ABI, drawing, execution and diagnostic checks.
