@@ -22,6 +22,92 @@ const BUTTONS = [
   ["a", "A", 16],
 ];
 
+// Where a touch on the d-pad square lands, as x and y from -1 (left, top) to 1 (right, bottom)
+// around its centre, and the direction bits it means.
+// The disc reads both axes, so it can hold a diagonal.
+export function discDirection(x, y) {
+  let bits = 0;
+  if (x < -DPAD_DEADZONE) {
+    bits |= LEFT;
+  }
+  if (x > DPAD_DEADZONE) {
+    bits |= RIGHT;
+  }
+  if (y < -DPAD_DEADZONE) {
+    bits |= UP;
+  }
+  if (y > DPAD_DEADZONE) {
+    bits |= DOWN;
+  }
+  return bits >>> 0;
+}
+
+// Half the width of the cross's dead hub, in the same units.
+export const HUB = 0.2;
+
+// The cross is four-way: inside the hub nothing is held, anywhere else the axis with the larger
+// travel wins, so a corner of the square resolves to the nearer arm and never to two directions.
+export function crossDirection(x, y) {
+  if (Math.abs(x) <= HUB && Math.abs(y) <= HUB) {
+    return 0;
+  }
+  if (Math.abs(x) > Math.abs(y)) {
+    return (x < 0 ? LEFT : RIGHT) >>> 0;
+  }
+  return (y < 0 ? UP : DOWN) >>> 0;
+}
+
+// The arms the cross draws, in the order they appear: name, arrow, bits.
+const ARMS = [
+  ["up", "▲", UP],
+  ["left", "◀", LEFT],
+  ["right", "▶", RIGHT],
+  ["down", "▼", DOWN],
+];
+
+// Selectable d-pad layouts. A new layout is one entry here (its `direction` and, if it draws
+// separate parts, `arms`), its look in STYLE under `[data-layout="name"]`, and one test.
+export const LAYOUTS = {
+  cross: { label: "Cross", direction: crossDirection, arms: true },
+  disc: { label: "Disc", direction: discDirection, arms: false },
+};
+export const DEFAULT_LAYOUT = "cross";
+export const LAYOUT_STORAGE_KEY = "bytorio-touch-layout";
+
+// The registry entry for `name`; anything that is not a layout name is the default.
+export function layoutFor(name) {
+  return typeof name === "string" && Object.hasOwn(LAYOUTS, name)
+    ? LAYOUTS[name]
+    : LAYOUTS[DEFAULT_LAYOUT];
+}
+const nameFor = (name) =>
+  typeof name === "string" && Object.hasOwn(LAYOUTS, name) ? name : DEFAULT_LAYOUT;
+
+function browserStorage() {
+  try {
+    return globalThis.localStorage;
+  } catch {
+    return undefined;
+  }
+}
+
+// The layout to start with: the `touch-layout` query parameter, then the stored choice, then the
+// default. A name that is not a layout, or storage that cannot be read, means the default.
+export function chooseTouchLayout(options = {}) {
+  const search = options.search ?? globalThis.location?.search ?? "";
+  const storage = "storage" in options ? options.storage : browserStorage();
+  const query = new URLSearchParams(search).get("touch-layout");
+  if (query !== null) {
+    return nameFor(query);
+  }
+  try {
+    const stored = storage?.getItem(LAYOUT_STORAGE_KEY);
+    return stored === null || stored === undefined ? DEFAULT_LAYOUT : nameFor(stored);
+  } catch {
+    return DEFAULT_LAYOUT;
+  }
+}
+
 const STYLE = `
 #touch-controls{--size:64px;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;
   touch-action:none;font:600 14px system-ui,sans-serif;z-index:10}
@@ -36,6 +122,17 @@ const STYLE = `
 #touch-controls [data-touch="l"],#touch-controls [data-touch="r"]{width:72px;height:${MIN_TARGET}px}
 #touch-controls [data-touch="dpad"]{width:144px;height:144px;border-radius:50%;
   background:radial-gradient(#10131e99 0 28%,#10131e66 29%)}
+#touch-controls [data-touch="dpad"][data-layout="cross"]{border:0;border-radius:0;background:none}
+#touch-controls [data-touch="dpad"][data-layout="cross"]::before{display:none}
+#touch-controls [data-arm],#touch-controls [data-hub]{position:absolute;display:grid;place-items:center;
+  box-sizing:border-box;width:34%;height:34%;border:2px solid #dfeae7aa;border-radius:8px;
+  background:#10131e99;font-size:16px;pointer-events:none}
+#touch-controls [data-hub]{left:33%;top:33%;background:#10131e55;border-color:#dfeae744}
+#touch-controls [data-arm="up"]{left:33%;top:0}
+#touch-controls [data-arm="down"]{left:33%;bottom:0}
+#touch-controls [data-arm="left"]{left:0;top:33%}
+#touch-controls [data-arm="right"]{right:0;top:33%}
+#touch-controls [data-arm].pressed{background:#70f0c0cc;color:#10131e}
 #touch-controls [data-touch="dpad"]::before{content:"";position:absolute;inset:0;border-radius:50%;
   background:linear-gradient(#dfeae755,#dfeae755) center/60% 2px no-repeat,
   linear-gradient(#dfeae755,#dfeae755) center/2px 60% no-repeat;pointer-events:none}
@@ -69,6 +166,7 @@ const STYLE = `
 // What each active pointer holds, so two thumbs combine and a lifted one releases only its own.
 const held = new Map();
 let root;
+let layoutName = DEFAULT_LAYOUT;
 let shown = false;
 let onLayout = () => {};
 let onActivate = () => {};
@@ -127,8 +225,16 @@ export function touchLayout({ width, height }) {
 
 function paint() {
   for (const element of root?.querySelectorAll("[data-touch]") ?? []) {
-    const active = [...held.values()].some((entry) => entry.element === element);
-    element.classList.toggle("pressed", active);
+    const entries = [...held.values()].filter((entry) => entry.element === element);
+    const split = element.dataset.touch === "dpad" && layoutFor(layoutName).arms;
+    // A layout with arms lights only the arms being pressed; the rest light as one piece.
+    element.classList.toggle("pressed", entries.length > 0 && !split);
+    if (split) {
+      for (const [name, , bits] of ARMS) {
+        const lit = entries.some((entry) => (entry.bits & bits) === bits);
+        element.querySelector(`[data-arm="${name}"]`)?.classList.toggle("pressed", lit);
+      }
+    }
   }
 }
 function release(id) {
@@ -145,21 +251,46 @@ function dpadBits(element, event) {
   const rectangle = element.getBoundingClientRect();
   const x = (event.clientX - (rectangle.left + rectangle.width / 2)) / (rectangle.width / 2);
   const y = (event.clientY - (rectangle.top + rectangle.height / 2)) / (rectangle.height / 2);
-  let bits = 0;
-  if (x < -DPAD_DEADZONE) {
-    bits |= LEFT;
-  }
-  if (x > DPAD_DEADZONE) {
-    bits |= RIGHT;
-  }
-  if (y < -DPAD_DEADZONE) {
-    bits |= UP;
-  }
-  if (y > DPAD_DEADZONE) {
-    bits |= DOWN;
-  }
-  return bits;
+  return layoutFor(layoutName).direction(x, y);
 }
+
+// Redraws the d-pad's parts for the active layout.
+function fillDpad(dpad) {
+  dpad.dataset.layout = layoutName;
+  dpad.replaceChildren();
+  if (layoutFor(layoutName).arms) {
+    for (const [name, arrow] of ARMS) {
+      const arm = document.createElement("div");
+      arm.dataset.arm = name;
+      arm.textContent = arrow;
+      dpad.append(arm);
+    }
+    const hub = document.createElement("div");
+    hub.dataset.hub = "";
+    dpad.append(hub);
+  }
+}
+
+// Switches the d-pad layout now, without touching the page or the game, and remembers the choice
+// where the browser allows it. Anything held is released, because its meaning just changed. Returns
+// the layout in use, which is the default for a name that is not a layout.
+export function setTouchLayout(name) {
+  layoutName = nameFor(name);
+  try {
+    globalThis.localStorage?.setItem(LAYOUT_STORAGE_KEY, layoutName);
+  } catch {
+    // The choice just lasts until the page closes.
+  }
+  const dpad = root?.querySelector('[data-touch="dpad"]');
+  if (dpad) {
+    releaseTouchControls();
+    fillDpad(dpad);
+    onLayout();
+  }
+  return layoutName;
+}
+
+export const touchLayoutName = () => layoutName;
 
 function track(element, bitsFor) {
   const update = (event) => {
@@ -194,6 +325,7 @@ function build(parent) {
   dpad.setAttribute("role", "group");
   dpad.setAttribute("aria-label", "Direction pad");
   track(dpad, (event) => dpadBits(dpad, event));
+  fillDpad(dpad);
   root.append(dpad);
   for (const [name, label, bits] of BUTTONS) {
     const button = document.createElement("div");
@@ -241,6 +373,7 @@ export function installTouchControls({
   onFullscreen: fullscreen = () => {},
 }) {
   onLayout = layout;
+  layoutName = chooseTouchLayout();
   onActivate = activate;
   onFullscreen = fullscreen;
   // Lifting a finger anywhere on the screen or the controls is a user gesture, so the host can
