@@ -124,14 +124,20 @@ const STYLE = `
   background:radial-gradient(#10131e99 0 28%,#10131e66 29%)}
 #touch-controls [data-touch="dpad"][data-layout="cross"]{border:0;border-radius:0;background:none}
 #touch-controls [data-touch="dpad"][data-layout="cross"]::before{display:none}
+/* The plus fills its square: arms and hub are --arm thick (40%), centred at --edge, and each arm is
+   --len long, which is what is left on either side of the hub plus a 1% overlap. */
+#touch-controls [data-touch="dpad"][data-layout="cross"]{--arm:40%;--len:31%;--edge:30%}
 #touch-controls [data-arm],#touch-controls [data-hub]{position:absolute;display:grid;place-items:center;
-  box-sizing:border-box;width:34%;height:34%;border:2px solid #dfeae7aa;border-radius:8px;
-  background:#10131e99;font-size:16px;pointer-events:none}
-#touch-controls [data-hub]{left:33%;top:33%;background:#10131e55;border-color:#dfeae744}
-#touch-controls [data-arm="up"]{left:33%;top:0}
-#touch-controls [data-arm="down"]{left:33%;bottom:0}
-#touch-controls [data-arm="left"]{left:0;top:33%}
-#touch-controls [data-arm="right"]{right:0;top:33%}
+  box-sizing:border-box;border:2px solid #dfeae7aa;border-radius:8px;
+  background:#10131e99;font-size:18px;pointer-events:none}
+#touch-controls [data-hub]{width:var(--arm);height:var(--arm);left:var(--edge);top:var(--edge);
+  background:#10131e55;border-color:#dfeae744}
+#touch-controls [data-arm="up"],#touch-controls [data-arm="down"]{width:var(--arm);height:var(--len);left:var(--edge)}
+#touch-controls [data-arm="left"],#touch-controls [data-arm="right"]{width:var(--len);height:var(--arm);top:var(--edge)}
+#touch-controls [data-arm="up"]{top:0}
+#touch-controls [data-arm="down"]{bottom:0}
+#touch-controls [data-arm="left"]{left:0}
+#touch-controls [data-arm="right"]{right:0}
 #touch-controls [data-arm].pressed{background:#70f0c0cc;color:#10131e}
 #touch-controls [data-touch="dpad"]::before{content:"";position:absolute;inset:0;border-radius:50%;
   background:linear-gradient(#dfeae755,#dfeae755) center/60% 2px no-repeat,
