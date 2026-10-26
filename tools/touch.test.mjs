@@ -188,6 +188,21 @@ test("controls are at least 44px, never cover the canvas middle and keep touches
           );
         }
       }
+      const boxes = [];
+      for (const control of CONTROLS) {
+        boxes.push([control, await box(control)]);
+      }
+      for (const [first, one] of boxes) {
+        for (const [second, two] of boxes) {
+          const apart =
+            first >= second ||
+            one.x + one.width <= two.x ||
+            two.x + two.width <= one.x ||
+            one.y + one.height <= two.y ||
+            two.y + two.height <= one.y;
+          assert.ok(apart, `${name}: ${first} and ${second} overlap`);
+        }
+      }
       await send("touchStart", [await at("a")]);
       await send("touchEnd", []);
       assert.equal(await page.evaluate(() => globalThis.canvasPointers), 0);
