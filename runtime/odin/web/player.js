@@ -5,7 +5,13 @@ import { normalizeGraphics } from "./gpu.js";
 import * as controls from "./constants.js";
 import { FrameClock, parseFrameRate } from "./frame-clock.js";
 import { gamepadButtons } from "./gamepad.js";
-import { installTouchControls, touchButtons, touchLayout, touchShown } from "./touch.js";
+import {
+  installTouchControls,
+  touchButtons,
+  touchLayout,
+  touchScale,
+  touchShown,
+} from "./touch.js";
 import { createTextInputOverlay } from "./text-input.js";
 const canvas = document.getElementById("canvas");
 const display = canvas.getContext("2d", { alpha: false });
@@ -889,7 +895,13 @@ function resize() {
     ((innerWidth - reserve.width) * density) / width,
     ((innerHeight - reserve.height) * density) / height,
   );
-  const scale = available >= 1 ? Math.floor(available) : Math.max(0.25, available);
+  // Desktop keeps whole device pixels; the touch layout falls back to an exact fit when they would
+  // leave a phone's screen mostly empty.
+  const scale = touchShown()
+    ? touchScale(available)
+    : available >= 1
+      ? Math.floor(available)
+      : Math.max(0.25, available);
   canvas.style.width = `${(width * scale) / density}px`;
   canvas.style.height = `${(height * scale) / density}px`;
   textInput.reposition();

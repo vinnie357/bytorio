@@ -87,6 +87,18 @@ export function touchButtons() {
 const MIN_COLUMN = 84;
 const MAX_COLUMN = 150;
 
+// Below this share of the free room, whole device pixels waste too much of a phone's screen, so
+// the canvas scales to the room instead. Fractional scaling gives slightly uneven pixel widths on
+// a 2x screen (the canvas stays pixelated); a 3x screen hides it.
+const MIN_FILL = 0.85;
+
+// The canvas scale for `fit` (the largest scale the room allows, in device pixels per game pixel):
+// whole numbers when they fill most of the room, the exact fit when they would not.
+export function touchScale(fit) {
+  const whole = Math.floor(fit);
+  return fit >= 1 && whole >= MIN_FILL * fit ? whole : Math.max(0.25, fit);
+}
+
 // Lays the controls out for a canvas of `logical` size and returns what the player must leave free
 // around it instead of its fixed space for the page's own controls, or null while the overlay is
 // hidden. Portrait leaves the panel's height below the canvas. Landscape gives each side a column
@@ -104,7 +116,7 @@ export function touchLayout({ width, height }) {
     ((innerWidth - 2 * MIN_COLUMN) * density) / width,
     ((innerHeight - MARGIN) * density) / height,
   );
-  const scale = fit >= 1 ? Math.floor(fit) : Math.max(0.25, fit);
+  const scale = touchScale(fit);
   const column = Math.min(
     MAX_COLUMN,
     Math.max(MIN_COLUMN, (innerWidth - (width * scale) / density) / 2),
