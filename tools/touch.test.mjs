@@ -52,8 +52,19 @@ window.ready = true;
     url: `http://127.0.0.1:${server.address().port}/build/touch-browser/${directory.split(/[\\/]/).at(-1)}/index.html`,
   };
 }
-async function phone(browser, url, viewport, ready = () => globalThis.ready) {
-  const context = await browser.newContext({ viewport, isMobile: true, hasTouch: true });
+async function phone(
+  browser,
+  url,
+  viewport,
+  ready = () => globalThis.ready,
+  deviceScaleFactor = 1,
+) {
+  const context = await browser.newContext({
+    viewport,
+    isMobile: true,
+    hasTouch: true,
+    deviceScaleFactor,
+  });
   const page = await context.newPage();
   await page.goto(url);
   await page.waitForFunction(ready);
@@ -322,6 +333,62 @@ test("lifting a touch on a control activates the host, and the fullscreen button
     );
     const portrait = await phone(browser, url, PHONES[1].viewport);
     assert.equal(await portrait.page.locator('[data-touch="full"]').isVisible(), false);
+  } finally {
+    await browser.close();
+    server.close();
+  }
+});
+
+test("on 2x and 3x phones the canvas fills the room the controls leave, not half of it", async () => {
+  const server = serve(repo, 0);
+  await new Promise((accept) => server.once("listening", accept));
+  const url = `http://127.0.0.1:${server.address().port}/runtime/odin/web/player.html`;
+  const browser = await chromium.launch({
+    channel: process.env.PLAYER_BROWSER_CHANNEL || undefined,
+    headless: true,
+  });
+  try {
+    const sizes = [
+      { width: 844, height: 390 },
+      { width: 740, height: 360 },
+      { width: 932, height: 430 },
+      { width: 390, height: 844 },
+    ];
+    for (const viewport of sizes) {
+      for (const density of [2, 3]) {
+        const label = `${viewport.width}x${viewport.height} at ${density}x`;
+        const { context, page } = await phone(
+          browser,
+          url,
+          viewport,
+          () => globalThis.document.getElementById("touch-controls"),
+          density,
+        );
+        const { canvas, column } = await page.evaluate(() => ({
+          canvas: globalThis.document.getElementById("canvas").getBoundingClientRect().toJSON(),
+          column: parseFloat(
+            globalThis
+              .getComputedStyle(globalThis.document.getElementById("touch-controls"))
+              .getPropertyValue("--col"),
+          ),
+        }));
+        const landscape = viewport.width > viewport.height;
+        // The room left after the columns (landscape) or after the page's margin (portrait), and
+        // after the control panel below the canvas in portrait.
+        const roomWidth = landscape ? viewport.width - 2 * column : viewport.width - 32;
+        const roomHeight = landscape ? viewport.height - 16 : Infinity;
+        const fill = Math.max(canvas.width / roomWidth, canvas.height / roomHeight);
+        assert.ok(
+          fill >= 0.85,
+          `${label}: the canvas fills ${Math.round(fill * 100)}% of its room`,
+        );
+        assert.ok(
+          canvas.width <= roomWidth + 1 && canvas.height <= roomHeight + 1,
+          `${label} fits`,
+        );
+        await context.close();
+      }
+    }
   } finally {
     await browser.close();
     server.close();
