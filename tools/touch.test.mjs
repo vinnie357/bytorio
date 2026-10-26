@@ -228,3 +228,33 @@ test("a desktop shows no overlay until the first touch", async () => {
     server.close();
   }
 });
+
+test("the player page fits a portrait phone instead of widening the layout", async () => {
+  const server = serve(repo, 0);
+  await new Promise((accept) => server.once("listening", accept));
+  const browser = await chromium.launch({
+    channel: process.env.PLAYER_BROWSER_CHANNEL || undefined,
+    headless: true,
+  });
+  try {
+    const context = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      isMobile: true,
+      hasTouch: true,
+    });
+    const page = await context.newPage();
+    // The player cannot load a runtime from here, which is fine: the layout runs first.
+    await page.goto(`http://127.0.0.1:${server.address().port}/runtime/odin/web/player.html`);
+    await page.waitForFunction(() => globalThis.document.getElementById("touch-controls"));
+    const layout = await page.evaluate(() => ({
+      width: globalThis.innerWidth,
+      canvas: globalThis.document.getElementById("canvas").getBoundingClientRect().right,
+    }));
+    assert.equal(layout.width, 390, "the canvas's own size must not widen the layout viewport");
+    assert.ok(layout.canvas <= 390, `the canvas ends at ${layout.canvas}`);
+    await context.close();
+  } finally {
+    await browser.close();
+    server.close();
+  }
+});
