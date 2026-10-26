@@ -44,11 +44,11 @@ window.ready = true;
     url: `http://127.0.0.1:${server.address().port}/build/touch-browser/${directory.split(/[\\/]/).at(-1)}/index.html`,
   };
 }
-async function phone(browser, url, viewport) {
+async function phone(browser, url, viewport, ready = () => globalThis.ready) {
   const context = await browser.newContext({ viewport, isMobile: true, hasTouch: true });
   const page = await context.newPage();
   await page.goto(url);
-  await page.waitForFunction(() => globalThis.ready);
+  await page.waitForFunction(ready);
   const cdp = await context.newCDPSession(page);
   const send = (type, points) =>
     cdp.send("Input.dispatchTouchEvent", {
@@ -155,32 +155,43 @@ test("blur and a hidden page release held buttons", async () => {
   }
 });
 
-test("controls are at least 44px, never cover the canvas middle and keep touches off the canvas", async () => {
-  const { server, url } = await startPage();
+// The real player page, which fits its canvas around the controls. It cannot load a runtime from the
+// repository root, which is fine: the layout runs first.
+const LAYOUTS = [
+  { name: "landscape", viewport: { width: 844, height: 390 } },
+  { name: "landscape", viewport: { width: 740, height: 360 } },
+  { name: "landscape", viewport: { width: 932, height: 430 } },
+  { name: "portrait", viewport: { width: 390, height: 844 } },
+  { name: "portrait", viewport: { width: 360, height: 640 } },
+];
+
+test("controls are at least 44px, apart from each other and from the canvas, and keep touches off it", async () => {
+  const server = serve(repo, 0);
+  await new Promise((accept) => server.once("listening", accept));
+  const url = `http://127.0.0.1:${server.address().port}/runtime/odin/web/player.html`;
   const browser = await chromium.launch({
     channel: process.env.PLAYER_BROWSER_CHANNEL || undefined,
     headless: true,
   });
   try {
-    for (const { name, viewport } of PHONES) {
-      const { context, page, send, box, at } = await phone(browser, url, viewport);
+    for (const { name, viewport } of LAYOUTS) {
+      const label = `${name} ${viewport.width}x${viewport.height}`;
+      const { context, page, send, box, at } = await phone(browser, url, viewport, () =>
+        globalThis.document.getElementById("touch-controls"),
+      );
       const canvas = await page.locator("#canvas").boundingBox();
-      const middle = {
-        left: canvas.x + canvas.width * 0.25,
-        right: canvas.x + canvas.width * 0.75,
-        top: canvas.y + canvas.height * 0.2,
-        bottom: canvas.y + canvas.height * 0.8,
-      };
+      const boxes = [];
       for (const control of CONTROLS) {
         const rectangle = await box(control);
-        assert.ok(rectangle.width >= 44 && rectangle.height >= 44, `${name} ${control} size`);
-        assert.ok(rectangle.x >= 0 && rectangle.x + rectangle.width <= viewport.width, control);
-        const overlapsMiddle =
-          rectangle.x < middle.right &&
-          rectangle.x + rectangle.width > middle.left &&
-          rectangle.y < middle.bottom &&
-          rectangle.y + rectangle.height > middle.top;
-        assert.equal(overlapsMiddle, false, `${name} ${control} leaves the canvas middle clear`);
+        boxes.push([control, rectangle]);
+        assert.ok(rectangle.width >= 44 && rectangle.height >= 44, `${label} ${control} size`);
+        assert.ok(rectangle.x >= 0 && rectangle.x + rectangle.width <= viewport.width, label);
+        const apart =
+          rectangle.x + rectangle.width <= canvas.x ||
+          canvas.x + canvas.width <= rectangle.x ||
+          rectangle.y + rectangle.height <= canvas.y ||
+          canvas.y + canvas.height <= rectangle.y;
+        assert.ok(apart, `${label} ${control} covers the canvas`);
         if (name === "portrait") {
           assert.ok(
             rectangle.y >= canvas.y + canvas.height - 1,
@@ -188,10 +199,7 @@ test("controls are at least 44px, never cover the canvas middle and keep touches
           );
         }
       }
-      const boxes = [];
-      for (const control of CONTROLS) {
-        boxes.push([control, await box(control)]);
-      }
+      assert.ok(canvas.x >= 0 && canvas.x + canvas.width <= viewport.width, `${label} canvas fits`);
       for (const [first, one] of boxes) {
         for (const [second, two] of boxes) {
           const apart =
@@ -200,9 +208,15 @@ test("controls are at least 44px, never cover the canvas middle and keep touches
             two.x + two.width <= one.x ||
             one.y + one.height <= two.y ||
             two.y + two.height <= one.y;
-          assert.ok(apart, `${name}: ${first} and ${second} overlap`);
+          assert.ok(apart, `${label}: ${first} and ${second} overlap`);
         }
       }
+      await page.evaluate(() => {
+        globalThis.canvasPointers = 0;
+        globalThis.document
+          .getElementById("canvas")
+          .addEventListener("pointerdown", () => globalThis.canvasPointers++);
+      });
       await send("touchStart", [await at("a")]);
       await send("touchEnd", []);
       assert.equal(await page.evaluate(() => globalThis.canvasPointers), 0);
