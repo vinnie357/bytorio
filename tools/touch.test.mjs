@@ -353,6 +353,7 @@ test("on 2x and 3x phones the canvas fills the room the controls leave, not half
       { width: 740, height: 360 },
       { width: 932, height: 430 },
       { width: 390, height: 844 },
+      { width: 360, height: 640 },
     ];
     for (const viewport of sizes) {
       for (const density of [2, 3]) {
@@ -389,6 +390,30 @@ test("on 2x and 3x phones the canvas fills the room the controls leave, not half
         await context.close();
       }
     }
+  } finally {
+    await browser.close();
+    server.close();
+  }
+});
+
+test("a desktop keeps whole device pixels for the canvas", async () => {
+  const server = serve(repo, 0);
+  await new Promise((accept) => server.once("listening", accept));
+  const browser = await chromium.launch({
+    channel: process.env.PLAYER_BROWSER_CHANNEL || undefined,
+    headless: true,
+  });
+  try {
+    // 1280x720 leaves room for 1.58x; a whole scale is 1x, and the touch rule must not change that.
+    const context = await browser.newContext({ viewport: { width: 1280, height: 720 } });
+    const page = await context.newPage();
+    await page.goto(`http://127.0.0.1:${server.address().port}/runtime/odin/web/player.html`);
+    await page.waitForFunction(() => globalThis.document.getElementById("canvas").style.width);
+    const canvas = await page.locator("#canvas").boundingBox();
+    assert.equal(canvas.width, 640);
+    assert.equal(canvas.height, 360);
+    assert.equal(await page.locator("#touch-controls").count(), 0);
+    await context.close();
   } finally {
     await browser.close();
     server.close();
