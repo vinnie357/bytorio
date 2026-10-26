@@ -197,7 +197,7 @@ The web player shows on-screen controls on touch devices (a coarse primary point
 first touch) and sends the same bits as the gamepad table: a d-pad, A (`action`), B (`escape`),
 START (`map`) and L/R (`rotate_left` and `rotate_right`). Controls are at least 44 px. In
 landscape they sit in a column on each side and the canvas fits between them; in portrait they sit
-below the canvas. Several touches combine, a thumb can slide across the d-pad, and everything
+below the canvas. Lifting a touch on the canvas or a control starts or resumes the player like its Start button (so a phone whose screen hides that button still plays), and landscape adds a FULL button for fullscreen. Several touches combine, a thumb can slide across the d-pad, and everything
 releases on lift, cancel, blur or when the page is hidden. Desktop pages build no overlay.
 
 Input version 2 adds `pointer_left`, `pointer_right`, `pointer_hover`,

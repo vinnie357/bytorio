@@ -49,11 +49,14 @@ const STYLE = `
   #touch-controls [data-touch="r"]{width:var(--wide);right:calc((var(--col) - var(--wide)) / 2 + env(safe-area-inset-right));top:var(--gap)}
   #touch-controls [data-touch="start"]{width:var(--wide);font-size:12px;
     right:calc((var(--col) - var(--wide)) / 2 + env(safe-area-inset-right));top:calc(2*var(--gap) + ${MIN_TARGET}px)}
+  #touch-controls [data-touch="full"]{width:var(--wide);font-size:12px;
+    left:calc((var(--col) - var(--wide)) / 2 + env(safe-area-inset-left));top:calc(2*var(--gap) + ${MIN_TARGET}px)}
   #touch-controls [data-touch="b"]{right:calc((var(--col) - var(--size)) / 2 + env(safe-area-inset-right));
     bottom:calc(2*var(--gap) + var(--size))}
   #touch-controls [data-touch="a"]{right:calc((var(--col) - var(--size)) / 2 + env(safe-area-inset-right));bottom:var(--gap)}
 }
 @media (orientation:portrait){
+  #touch-controls [data-touch="full"]{display:none}
   #touch-controls{position:relative;width:100%;min-width:320px;height:${PANEL_HEIGHT}px;margin-top:${MARGIN}px}
   #touch-controls [data-touch="dpad"]{left:${MARGIN}px;bottom:${MARGIN}px}
   #touch-controls [data-touch="a"]{right:${MARGIN}px;bottom:${MARGIN}px}
@@ -68,6 +71,8 @@ const held = new Map();
 let root;
 let shown = false;
 let onLayout = () => {};
+let onActivate = () => {};
+let onFullscreen = () => {};
 
 // Union of everything currently held, as an unsigned 32-bit mask.
 export function touchButtons() {
@@ -187,6 +192,17 @@ function build(parent) {
     track(button, () => bits);
     root.append(button);
   }
+  if (document.fullscreenEnabled) {
+    // The page's own Fullscreen button falls below a landscape phone's screen.
+    const full = document.createElement("div");
+    full.dataset.touch = "full";
+    full.setAttribute("role", "button");
+    full.setAttribute("aria-label", "Fullscreen");
+    full.textContent = "FULL";
+    full.addEventListener("pointerup", () => onFullscreen());
+    full.addEventListener("contextmenu", (event) => event.preventDefault());
+    root.append(full);
+  }
   parent.append(root);
 }
 
@@ -202,10 +218,27 @@ function show(parent) {
   onLayout();
 }
 
+// `onActivate` runs when a touch is lifted on the canvas or a control; `onFullscreen` when the
+// FULL button is lifted.
 // Builds the overlay inside `parent` on touch devices: at once for a coarse primary pointer,
 // otherwise on the first touch. A mouse-only page gets no elements and no listeners that matter.
-export function installTouchControls({ parent, onLayout: layout = () => {} }) {
+export function installTouchControls({
+  parent,
+  onLayout: layout = () => {},
+  onActivate: activate = () => {},
+  onFullscreen: fullscreen = () => {},
+}) {
   onLayout = layout;
+  onActivate = activate;
+  onFullscreen = fullscreen;
+  // Lifting a finger anywhere on the screen or the controls is a user gesture, so the host can
+  // start or resume the game (and unlock audio) as its own Start button does. Mouse clicks keep
+  // their existing behaviour.
+  parent.addEventListener("pointerup", (event) => {
+    if (event.pointerType === "touch") {
+      onActivate();
+    }
+  });
   const coarse = matchMedia("(pointer: coarse)");
   if (coarse.matches) {
     show(parent);

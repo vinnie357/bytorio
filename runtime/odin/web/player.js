@@ -917,6 +917,14 @@ canvas.addEventListener("contextlost", (event) => {
 window.addEventListener("resize", resize);
 installTouchControls({
   parent: document.getElementById("screen"),
+  // A lifted touch starts or resumes the player exactly as the Start button does, so a landscape
+  // phone that cannot reach that button still plays.
+  onActivate: () => {
+    if (!started && !button.disabled) {
+      start().catch((error) => fail(error.message));
+    }
+  },
+  onFullscreen: () => document.getElementById("fullscreen").click(),
   onLayout: () => {
     resize();
     if ([KEYBOARD_HELP, TOUCH_HELP].includes(status.textContent)) {
