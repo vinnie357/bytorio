@@ -1,7 +1,8 @@
-import { copyFile, cp, mkdir, readFile, stat, utimes, writeFile } from "node:fs/promises";
+import { cp, mkdir, readFile, stat, utimes, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { dirname, resolve } from "node:path";
 import { execFileSync } from "node:child_process";
+import { copyAtomic } from "./atomic-file.mjs";
 import {
   emscriptenRoot,
   nativePlayer,
@@ -98,7 +99,7 @@ async function copyFiles(target, entries) {
   for (const [name, source] of entries) {
     const destination = resolve(target, name);
     await mkdir(dirname(destination), { recursive: true });
-    await copyFile(source, destination);
+    await copyAtomic(source, destination);
   }
 }
 

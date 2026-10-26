@@ -84,7 +84,7 @@ try {
         launch();
       } else {
         const port = Number(options.port || 8080);
-        if (!Number.isInteger(port) || port < 1 || port > MAX_TCP_PORT) {
+        if (!Number.isInteger(port) || port < 0 || port > MAX_TCP_PORT) {
           throw new Error("Invalid port");
         }
         const server = serve(resolve(spec.project, "build/web"), port);
@@ -94,7 +94,7 @@ try {
         });
         const query = options.fps === undefined ? "" : `?fps=${encodeURIComponent(options.fps)}`;
         server.on("listening", () =>
-          console.log(`Player: http://127.0.0.1:${port}/player.html${query}`),
+          console.log(`Player: http://127.0.0.1:${server.address().port}/player.html${query}`),
         );
       }
       if (action === "watch") {
