@@ -6,9 +6,12 @@ import * as controls from "./constants.js";
 import { FrameClock, parseFrameRate } from "./frame-clock.js";
 import { gamepadButtons } from "./gamepad.js";
 import {
+  LAYOUTS,
   installTouchControls,
+  setTouchLayout,
   touchButtons,
   touchLayout,
+  touchLayoutName,
   touchScale,
   touchShown,
 } from "./touch.js";
@@ -927,6 +930,14 @@ canvas.addEventListener("contextlost", (event) => {
   fail("Display context lost. Restore the display and restart the game.");
 });
 window.addEventListener("resize", resize);
+// The touch layout picker: one option per registry entry, applied live.
+const layoutSelect = document.getElementById("touch-layout");
+for (const [name, entry] of Object.entries(LAYOUTS)) {
+  layoutSelect.append(new Option(entry.label, name));
+}
+layoutSelect.addEventListener("change", () => {
+  layoutSelect.value = setTouchLayout(layoutSelect.value);
+});
 installTouchControls({
   parent: document.getElementById("screen"),
   // A lifted touch starts or resumes the player exactly as the Start button does, so a landscape
@@ -944,6 +955,7 @@ installTouchControls({
     }
   },
 });
+layoutSelect.value = touchLayoutName();
 resize();
 if (graphicsError || timingError) {
   fail(graphicsError || timingError);

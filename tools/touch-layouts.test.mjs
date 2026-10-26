@@ -16,6 +16,9 @@ import { repo } from "./toolchain.mjs";
 import { DOWN, LEFT, RIGHT, UP, phone, startPage } from "./touch-test-support.mjs";
 
 const DIRECTIONS = [LEFT, RIGHT, UP, DOWN];
+// Chrome delivers pointermove once per frame, so let a frame pass before reading what a move did.
+const frame = (page) =>
+  page.evaluate(() => new Promise((done) => globalThis.requestAnimationFrame(() => done())));
 const MOVE_BITS = (n) => DIRECTIONS.filter((bits) => (n & bits) === bits).length;
 // A phone shape per orientation, plus a small portrait one, all at 3x.
 const VIEWPORTS = [
@@ -143,10 +146,13 @@ test("the cross sends one direction per arm, never a diagonal, and lights only t
       assert.equal(await page.locator('[data-touch="dpad"] .pressed').count(), 0);
       // Sliding from arm to arm without lifting changes the direction.
       await send("touchMove", [await at("dpad", 0.1, 0.5)]);
+      await frame(page);
       assert.equal(await mask(), LEFT);
       await send("touchMove", [await at("dpad", 0.5, 0.1)]);
+      await frame(page);
       assert.equal(await mask(), UP);
       await send("touchMove", [await at("dpad", 0.9, 0.9)]);
+      await frame(page);
       assert.ok(MOVE_BITS(await mask()) === 1, "a corner in a slide is still one direction");
       await send("touchEnd", []);
       assert.equal(await mask(), 0);
