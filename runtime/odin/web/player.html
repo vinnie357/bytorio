@@ -48,6 +48,11 @@
       #screen {
         position: relative;
       }
+      /* The canvas's own 640 px width would otherwise widen a phone's layout viewport past the screen, and
+         the scale to fit is computed from that viewport. Fullscreen fills the screen, so it is exempt. */
+      #screen:not(:fullscreen) canvas {
+        max-width: calc(100vw - 32px);
+      }
       #performance {
         position: absolute;
         top: 6px;
