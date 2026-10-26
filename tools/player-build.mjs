@@ -1,6 +1,7 @@
-import { copyFile, mkdir } from "node:fs/promises";
+import { mkdir, rename } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { MAX_CARTRIDGE_BYTES, resourceSchema as limits } from "../runtime/odin/web/constants.js";
+import { copyAtomic, discardTemporary, temporaryBeside } from "./atomic-file.mjs";
 import { dependencyRoot, nativeLinkerFlags, nativePlayer, repo, run, tool } from "./toolchain.mjs";
 
 const artifact = process.argv[2];
@@ -28,9 +29,18 @@ if (!run(odin, ["version"]).includes("84bc3fc")) {
   throw new Error("Odin dev-2026-10 (84bc3fc) is required");
 }
 
+// Builds beside the output under a name of its own and renames the result into place. Builds started together,
+// as byt runs are after a dependency update, then share no intermediate (wasm-ld's `<out>.o` among them), and
+// nothing copying the output can catch it half written.
 async function build(source, flags, output) {
   await mkdir(dirname(output), { recursive: true });
-  run(odin, ["build", source, ...flags, `-out:${output}`], { stdio: "inherit" });
+  const temporary = await temporaryBeside(output);
+  try {
+    run(odin, ["build", source, ...flags, `-out:${temporary}`], { stdio: "inherit" });
+    await rename(temporary, output);
+  } finally {
+    await discardTemporary(temporary);
+  }
 }
 
 switch (artifact) {
@@ -67,7 +77,7 @@ switch (artifact) {
       resolve(web, "game.wasm"),
     );
     await mkdir(native, { recursive: true });
-    await copyFile(resolve(web, "game.wasm"), resolve(native, "game.wasm"));
+    await copyAtomic(resolve(web, "game.wasm"), resolve(native, "game.wasm"));
     break;
   case "fixtures": {
     const kinds = [

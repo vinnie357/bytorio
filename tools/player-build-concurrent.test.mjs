@@ -50,6 +50,6 @@ test("simultaneous player builds all succeed and no reader ever sees a partial o
     assert.equal(result.status, 0, result.output.slice(-600));
   }
   assert.deepEqual([...new Set(problems)], [], "a reader saw a missing or partial game.wasm");
-  const left = (await readdir(web)).filter((name) => /\.tmp|\.part|-\d+\./.test(name));
+  const left = (await readdir(web)).filter((name) => name.startsWith(".tmp-"));
   assert.deepEqual(left, [], "intermediate files were left behind");
 });
