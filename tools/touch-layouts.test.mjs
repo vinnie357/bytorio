@@ -350,3 +350,45 @@ test("each layout leaves the 44px targets, the columns and the canvas as they we
     server.close();
   }
 });
+
+test("the cross's arms and hub are 40% of the square, in both orientations", async () => {
+  const { server, url } = await startPage("cross");
+  const browser = await launch();
+  try {
+    for (const viewport of VIEWPORTS) {
+      const label = `${viewport.width}x${viewport.height}`;
+      const { context, page, box } = await phone(browser, url, viewport, undefined, 3);
+      const pad = await box("dpad");
+      const part = (selector) => page.locator(`[data-touch="dpad"] ${selector}`).boundingBox();
+      const near = (actual, share, what) =>
+        assert.ok(
+          Math.abs(actual / pad.width - share) < 0.01,
+          `${label}: ${what} is ${((actual / pad.width) * 100).toFixed(1)}% of the cross`,
+        );
+      for (const name of ["up", "down"]) {
+        const arm = await part(`[data-arm="${name}"]`);
+        near(arm.width, 0.4, `${name} arm thickness`);
+        near(arm.height, 0.31, `${name} arm length`);
+      }
+      for (const name of ["left", "right"]) {
+        const arm = await part(`[data-arm="${name}"]`);
+        near(arm.height, 0.4, `${name} arm thickness`);
+        near(arm.width, 0.31, `${name} arm length`);
+      }
+      const hub = await part("[data-hub]");
+      near(hub.width, 0.4, "hub width");
+      near(hub.height, 0.4, "hub height");
+      // The plus fits the square exactly, and the whole square still takes the touch.
+      for (const name of ["up", "down", "left", "right"]) {
+        const arm = await part(`[data-arm="${name}"]`);
+        assert.ok(arm.x >= pad.x - 0.5 && arm.x + arm.width <= pad.x + pad.width + 0.5, label);
+        assert.ok(arm.y >= pad.y - 0.5 && arm.y + arm.height <= pad.y + pad.height + 0.5, label);
+      }
+      assert.ok(pad.width >= 44 && pad.height >= 44, `${label} keeps the 44px target`);
+      await context.close();
+    }
+  } finally {
+    await browser.close();
+    server.close();
+  }
+});
