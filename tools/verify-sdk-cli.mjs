@@ -169,6 +169,32 @@ try {
     await once(watcher, "exit");
   }
 }
+// Port 0 lets the system choose, and the server reports the port it actually bound. A caller that picks a free port
+// first and binds it later races any other process doing the same.
+const dynamic = spawn(process.execPath, ["tools/byt.mjs", "run", project, "--web", "--port", "0"], {
+  stdio: ["ignore", "pipe", "pipe"],
+});
+let dynamicOutput = "";
+dynamic.stdout.on("data", (data) => (dynamicOutput += data));
+dynamic.stderr.on("data", (data) => (dynamicOutput += data));
+try {
+  const deadline = Date.now() + 30000;
+  let bound;
+  while (!bound) {
+    bound = /Player: (http:\/\/127\.0\.0\.1:(\d+)\/player\.html)/.exec(dynamicOutput);
+    if (!bound && (dynamic.exitCode !== null || Date.now() > deadline)) {
+      throw new Error("--port 0 did not report a bound port: " + dynamicOutput);
+    }
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  assert.ok(Number(bound[2]) > 0, "the reported port is the real one, not 0");
+  assert.equal((await fetch(bound[1])).status, 200, "the reported URL serves the player");
+} finally {
+  dynamic.kill();
+  if (dynamic.exitCode === null) {
+    await once(dynamic, "exit");
+  }
+}
 console.log(
-  "SDK CLI passed: starter typing, exclusive creation, modules, comments/strings, cycles, static serving, watch rebuild, failed-build preservation and recovery.",
+  "SDK CLI passed: starter typing, exclusive creation, modules, comments/strings, cycles, static serving, a system-chosen port, watch rebuild, failed-build preservation and recovery.",
 );
