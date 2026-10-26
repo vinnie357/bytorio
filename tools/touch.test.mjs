@@ -18,6 +18,8 @@ const PHONES = [
   { name: "portrait", viewport: { width: 390, height: 844 } },
 ];
 const CONTROLS = ["dpad", "a", "b", "start", "l", "r"];
+// Landscape also has a fullscreen button, because the page's own buttons fall below a phone's screen.
+const LANDSCAPE_CONTROLS = [...CONTROLS, "full"];
 
 async function startPage() {
   const directory = resolve(repo, "build/touch-browser", randomUUID());
@@ -33,7 +35,13 @@ import { installTouchControls, touchButtons } from "/runtime/odin/web/touch.js";
 window.touchButtons = touchButtons;
 window.canvasPointers = 0;
 document.getElementById("canvas").addEventListener("pointerdown", () => window.canvasPointers++);
-installTouchControls({ parent: document.getElementById("screen") });
+window.activations = 0;
+window.fullscreens = 0;
+installTouchControls({
+  parent: document.getElementById("screen"),
+  onActivate: () => window.activations++,
+  onFullscreen: () => window.fullscreens++,
+});
 window.ready = true;
 </script>`,
   );
@@ -181,7 +189,7 @@ test("controls are at least 44px, apart from each other and from the canvas, and
       );
       const canvas = await page.locator("#canvas").boundingBox();
       const boxes = [];
-      for (const control of CONTROLS) {
+      for (const control of name === "landscape" ? LANDSCAPE_CONTROLS : CONTROLS) {
         const rectangle = await box(control);
         boxes.push([control, rectangle]);
         assert.ok(rectangle.width >= 44 && rectangle.height >= 44, `${label} ${control} size`);
@@ -282,6 +290,38 @@ test("the player page fits a portrait phone instead of widening the layout", asy
     assert.equal(layout.width, 390, "the canvas's own size must not widen the layout viewport");
     assert.ok(layout.canvas <= 390, `the canvas ends at ${layout.canvas}`);
     await context.close();
+  } finally {
+    await browser.close();
+    server.close();
+  }
+});
+
+test("lifting a touch on a control activates the host, and the fullscreen button asks for fullscreen", async () => {
+  const { server, url } = await startPage();
+  const browser = await chromium.launch({
+    channel: process.env.PLAYER_BROWSER_CHANNEL || undefined,
+    headless: true,
+  });
+  try {
+    const { send, at, page } = await phone(browser, url, PHONES[0].viewport);
+    const count = (name) => page.evaluate((key) => globalThis[key], name);
+    await send("touchStart", [await at("a")]);
+    assert.equal(await count("activations"), 0, "a press alone is not a user gesture to start on");
+    await send("touchEnd", []);
+    assert.equal(await count("activations"), 1, "lifting is");
+    await send("touchStart", [await at("dpad", 0.9, 0.5)]);
+    await send("touchEnd", []);
+    assert.equal(await count("activations"), 2);
+    await send("touchStart", [await at("full")]);
+    await send("touchEnd", []);
+    assert.equal(await count("fullscreens"), 1);
+    assert.equal(
+      await page.evaluate(() => globalThis.touchButtons()),
+      0,
+      "FULL sends no game bits",
+    );
+    const portrait = await phone(browser, url, PHONES[1].viewport);
+    assert.equal(await portrait.page.locator('[data-touch="full"]').isVisible(), false);
   } finally {
     await browser.close();
     server.close();
