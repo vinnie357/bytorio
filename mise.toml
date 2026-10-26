@@ -176,6 +176,10 @@ description = "Verify native and browser gamepad mapping against a virtual SDL3 
 depends = ["deps:sdl3:native"]
 run = ["node --test tools/gamepad.test.mjs", "node tools/verify-gamepad.mjs"]
 
+[tasks."test:touch"]
+description = "Verify the on-screen touch controls with emulated touch on phone viewports"
+run = "node --test tools/touch.test.mjs"
+
 [tasks."test:cartridge"]
 run = ["node --test tools/cartridge-load.test.mjs", "node tools/verify-cartridge.mjs", "node tools/verify-content.mjs"]
 
@@ -270,6 +274,7 @@ run = [
   {task = "test:save"},
   {task = "test:text-input"},
   {task = "test:gamepad"},
+  {task = "test:touch"},
   {task = "test:cartridge"},
   {task = "test:resources"},
   {task = "test:graphics"},
