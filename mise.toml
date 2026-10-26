@@ -168,6 +168,10 @@ description = "Verify native and browser text input through both SDKs"
 depends = ["build:odin", "deps:luau"]
 run = ["node --test tools/text-input.test.mjs", "node tools/verify-text-input.mjs"]
 
+[tasks."test:player-build-concurrent"]
+description = "Verify simultaneous player builds do not collide or expose partial outputs"
+run = "node --test tools/player-build-concurrent.test.mjs"
+
 [tasks."test:bundle-strip"]
 description = "Verify the Luau bundler strips comments without moving a line"
 run = "node --test tools/bundle-strip.test.mjs"
@@ -274,6 +278,7 @@ run = [
   {task = "test:build-tasks"},
   {task = "test:extract"},
   {task = "test:bundle-strip"},
+  {task = "test:player-build-concurrent"},
   {task = "test:player-export"},
     {task = "test:cli"},
   {task = "test:sdk"},
