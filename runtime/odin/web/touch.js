@@ -40,14 +40,18 @@ const STYLE = `
   background:linear-gradient(#dfeae755,#dfeae755) center/60% 2px no-repeat,
   linear-gradient(#dfeae755,#dfeae755) center/2px 60% no-repeat;pointer-events:none}
 @media (orientation:landscape){
-  #touch-controls{position:fixed;inset:0;pointer-events:none;
-    padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
-  #touch-controls [data-touch="dpad"]{left:calc(${MARGIN}px + env(safe-area-inset-left));bottom:${MARGIN}px}
-  #touch-controls [data-touch="a"]{right:calc(${MARGIN}px + env(safe-area-inset-right));bottom:${MARGIN}px}
-  #touch-controls [data-touch="b"]{right:calc(${MARGIN}px + var(--size) + 12px + env(safe-area-inset-right));bottom:${MARGIN + 36}px}
-  #touch-controls [data-touch="start"]{left:50%;bottom:${MARGIN}px;transform:translateX(-50%)}
-  #touch-controls [data-touch="l"]{left:calc(${MARGIN}px + env(safe-area-inset-left));top:${MARGIN}px}
-  #touch-controls [data-touch="r"]{right:calc(${MARGIN}px + env(safe-area-inset-right));top:${MARGIN}px}
+  #touch-controls{--col:102px;--gap:8px;--pad:clamp(44px,calc(var(--col) - 2*var(--gap)),144px);
+    --size:clamp(44px,calc(var(--col) - 2*var(--gap)),64px);--wide:clamp(44px,calc(var(--col) - 2*var(--gap)),88px);
+    position:fixed;inset:0;pointer-events:none}
+  #touch-controls [data-touch="dpad"]{width:var(--pad);height:var(--pad);
+    left:calc((var(--col) - var(--pad)) / 2 + env(safe-area-inset-left));bottom:var(--gap)}
+  #touch-controls [data-touch="l"]{width:var(--wide);left:calc((var(--col) - var(--wide)) / 2 + env(safe-area-inset-left));top:var(--gap)}
+  #touch-controls [data-touch="r"]{width:var(--wide);right:calc((var(--col) - var(--wide)) / 2 + env(safe-area-inset-right));top:var(--gap)}
+  #touch-controls [data-touch="start"]{width:var(--wide);font-size:12px;
+    right:calc((var(--col) - var(--wide)) / 2 + env(safe-area-inset-right));top:calc(2*var(--gap) + ${MIN_TARGET}px)}
+  #touch-controls [data-touch="b"]{right:calc((var(--col) - var(--size)) / 2 + env(safe-area-inset-right));
+    bottom:calc(2*var(--gap) + var(--size))}
+  #touch-controls [data-touch="a"]{right:calc((var(--col) - var(--size)) / 2 + env(safe-area-inset-right));bottom:var(--gap)}
 }
 @media (orientation:portrait){
   #touch-controls{position:relative;width:100%;min-width:320px;height:${PANEL_HEIGHT}px;margin-top:${MARGIN}px}
@@ -74,14 +78,34 @@ export function touchButtons() {
   return mask >>> 0;
 }
 
-// What replaces the fixed space the player reserves around the canvas (the page's own controls)
-// while the overlay is up, or null when it is hidden. Portrait leaves the panel's height below the
-// canvas; landscape draws over the page, so only a small margin remains.
-export function touchLayoutReserve() {
+// Widest and narrowest column landscape leaves for the controls beside the canvas.
+const MIN_COLUMN = 84;
+const MAX_COLUMN = 150;
+
+// Lays the controls out for a canvas of `logical` size and returns what the player must leave free
+// around it instead of its fixed space for the page's own controls, or null while the overlay is
+// hidden. Portrait leaves the panel's height below the canvas. Landscape gives each side a column
+// for the controls and the canvas fits between them: the column is whatever the canvas, scaled as
+// the player scales it, leaves over, within MIN_COLUMN and MAX_COLUMN.
+export function touchLayout({ width, height }) {
   if (!shown) {
     return null;
   }
-  return matchMedia("(orientation: portrait)").matches ? PANEL_HEIGHT + 2 * MARGIN : MARGIN;
+  if (matchMedia("(orientation: portrait)").matches) {
+    return { width: 2 * MARGIN, height: PANEL_HEIGHT + 2 * MARGIN };
+  }
+  const density = devicePixelRatio || 1;
+  const fit = Math.min(
+    ((innerWidth - 2 * MIN_COLUMN) * density) / width,
+    ((innerHeight - MARGIN) * density) / height,
+  );
+  const scale = fit >= 1 ? Math.floor(fit) : Math.max(0.25, fit);
+  const column = Math.min(
+    MAX_COLUMN,
+    Math.max(MIN_COLUMN, (innerWidth - (width * scale) / density) / 2),
+  );
+  root.style.setProperty("--col", `${column}px`);
+  return { width: 2 * column, height: MARGIN };
 }
 
 function paint() {
@@ -201,3 +225,6 @@ export function installTouchControls({ parent, onLayout: layout = () => {} }) {
   document.addEventListener("visibilitychange", releaseTouchControls);
   addEventListener("pagehide", releaseTouchControls);
 }
+
+// Whether the overlay is up, for wording such as the page's help line.
+export const touchShown = () => shown;
