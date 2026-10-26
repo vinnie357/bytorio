@@ -98,7 +98,8 @@ assert.ok(
   bundled.includes('[=[require("also-not-an-import")]=]'),
   "bundler preserves long strings",
 );
-assert.ok(bundled.includes('-- require("./missing")'), "bundler preserves comments");
+// A require inside a comment is not an import (the build above succeeded) and the comment is stripped.
+assert.ok(!bundled.includes('require("./missing")'), "bundler strips comments");
 await writeFile(resolve(project, "src/a.luau"), 'return require("./b")\n');
 await writeFile(resolve(project, "src/b.luau"), 'return require("./a")\n');
 await assert.rejects(
