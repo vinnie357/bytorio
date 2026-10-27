@@ -69,7 +69,7 @@ return {
     draw_text = function(_text: string, _x: number, _y: number, _color: number)
         unavailable()
     end,
-    graphics_assets = function(_data: string)
+    graphics_assets = function(_data: string | buffer)
         unavailable()
     end,
     buttons = function(): number

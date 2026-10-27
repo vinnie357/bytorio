@@ -82,6 +82,24 @@ export async function manifest(path) {
   if (!["odin", "luau"].includes(value.language)) {
     throw new Error("language must be luau or odin");
   }
+  if (value.assetsContent !== undefined) {
+    if (
+      !Number.isInteger(value.assetsContent) ||
+      value.assetsContent <= 0 ||
+      value.assetsContent > 0xffffffff
+    ) {
+      throw new Error("assetsContent must be a positive u32 integer content id");
+    }
+    if (value.language !== "luau") {
+      throw new Error("assetsContent is supported only for Luau projects");
+    }
+    if (
+      Array.isArray(value.content) &&
+      value.content.some(({ id }) => id === value.assetsContent)
+    ) {
+      throw new Error("assetsContent must not collide with a content id");
+    }
+  }
   if (
     !contract.displayModes.some(
       ([w, h]) =>
@@ -130,6 +148,7 @@ async function prepare(path) {
       project: spec.project,
       sdkRoot: resolve(repo, "sdk/luau"),
       assets: packet,
+      assetsContent: spec.assetsContent,
       display: spec.display,
       profile: spec.profileId,
     });
@@ -235,10 +254,19 @@ async function projectCartridge(spec, coverPath = spec.cover) {
   }
   const content = [];
   const limits = contract.cartridge.content;
-  if ((spec.content?.length || 0) > limits.maxEntries) {
+  const entryCount = (spec.content?.length || 0) + (spec.assetsContent !== undefined ? 1 : 0);
+  if (entryCount > limits.maxEntries) {
     throw new Error("Cartridge content exceeds its entry limit");
   }
-  let contentBytes = limits.headerBytes + (spec.content?.length || 0) * limits.recordBytes;
+  let contentBytes = limits.headerBytes + entryCount * limits.recordBytes;
+  if (spec.assetsContent !== undefined) {
+    const { packet } = await readGraphics(spec.assets);
+    contentBytes += packet.length;
+    if (contentBytes > limits.maxBytes) {
+      throw new Error("Cartridge content exceeds its byte limit");
+    }
+    content.push({ id: spec.assetsContent, bytes: packet });
+  }
   for (const entry of spec.content || []) {
     const path = await inside(spec.project, entry.path);
     const info = await stat(path);

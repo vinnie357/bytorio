@@ -187,9 +187,21 @@ function api.text(value: string, x: number, y: number, color: number)
         host.draw_text(value, x, y, color)
     end
 end
-function api.assets(encoded: string)
+function api.assets(source: string | buffer | number)
     assert(phase == "load" or phase == "init", "graphics assets are immutable after init")
-    host.graphics_assets(encoded)
+    if type(source) == "number" then
+        local size = api.content.size(source)
+        assert(size > 0, "graphics content " .. tostring(source) .. " is missing or empty")
+        assert(size <= c.MAX_GRAPHICS_BYTES, "graphics assets too large")
+        local bytes = buffer.create(size)
+        assert(
+            api.content.read(source, 0, bytes),
+            "graphics content " .. tostring(source) .. " is unreadable"
+        )
+        host.graphics_assets(bytes)
+    else
+        host.graphics_assets(source)
+    end
 end
 function api.buttons(): number
     return bit32.band(held, c.LEGACY_BUTTON_MASK)
