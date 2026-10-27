@@ -128,6 +128,15 @@ int rect(lua_State* L) {
 }
 
 int graphics_assets(lua_State* L) {
+    if (lua_isbuffer(L, 1)) {
+        std::size_t size;
+        const void* bytes = luaL_checkbuffer(L, 1, &size);
+        if (size > max_assets)
+            luaL_error(L, "graphics assets too large");
+        std::memcpy(assets, bytes, size);
+        assets_size = static_cast<std::uint32_t>(size);
+        return 0;
+    }
     std::size_t size;
     const auto* encoded = luaL_checklstring(L, 1, &size);
     if (size > max_assets * 4 / 3 + 4)

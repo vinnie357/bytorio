@@ -112,6 +112,15 @@ runtime components, loading commands and current preview limits.
 For assets larger than the code budget, declare `content: [{"id": 1, "path":
 "assets/atlas.rgba"}]` in `console.json`. The [indexed content guide](../docs/indexed-content.md)
 describes both SDK read APIs, byte limits and the immutable cartridge index.
+Luau projects can set the optional top-level `"assetsContent": 3` to package
+the generated graphics packet as content instead of embedding base64 in code.
+Use a positive unsigned 32-bit ID distinct from every listed content ID; the
+packet counts toward content byte and entry limits. Odin projects reject this
+field. Without it, packaging keeps the existing base64 path.
+
+Luau's `byt.assets(source)` accepts a base64 string, a raw graphics packet buffer,
+or a content ID. Missing or unreadable content reports the ID. Uploads copy
+buffer bytes, so callers can reuse the buffer. Call only during load or init.
 
 ## Project structure and lifecycle
 

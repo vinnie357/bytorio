@@ -184,6 +184,7 @@ export async function bundleLuau({
   project,
   sdkRoot,
   assets,
+  assetsContent,
   display = [640, 360],
   profile = 1,
   strip = true,
@@ -294,7 +295,7 @@ export async function bundleLuau({
     output.push(`__modules[${JSON.stringify(id)}]=function()\n${source}\nend`);
   }
   output.push(
-    `local __sdk=__require(${JSON.stringify(sdkId)})\n__sdk.assets(${JSON.stringify(assets.toString("base64"))})\nreturn __sdk._wrap(__require(${JSON.stringify(mainId)}),${display[0]},${display[1]})\n`,
+    `local __sdk=__require(${JSON.stringify(sdkId)})\n__sdk.assets(${assetsContent !== undefined ? assetsContent : JSON.stringify(assets.toString("base64"))})\nreturn __sdk._wrap(__require(${JSON.stringify(mainId)}),${display[0]},${display[1]})\n`,
   );
   // Comments cost cartridge bytes and the player never reads them; the sources keep theirs.
   // Stripping runs after formatting, so the formatter's layout is the layout the lines keep.

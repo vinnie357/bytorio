@@ -21,6 +21,20 @@ is a `Uint8Array` or Node buffer. IDs are unique positive unsigned 32-bit intege
 Entries must be nonempty. Asset names, codecs and application metadata are game
 concerns; generate a small ID table alongside your game sources when needed.
 
+Luau projects may set the optional top-level `"assetsContent": 3` in
+`console.json`. The SDK packages the graphics packet generated from the existing
+`assets` file under that content ID and bundles `byt.assets(3)` instead of a
+base64 packet. The ID must be a positive unsigned 32-bit integer, unique among
+the listed `content` IDs. The packet and its index record count toward the
+content byte and entry limits. Odin projects reject `assetsContent`. Omitting
+the field preserves the existing embedded base64 packaging.
+
+`byt.assets(source)` accepts a base64 `string`, a raw graphics packet `buffer`,
+or a numeric content ID. The numeric form reads the complete entry into a
+buffer; missing or unreadable entries report an error naming the ID. Buffers
+are copied on upload and may be reused afterward. All forms require the load
+or init phase; graphics remain immutable afterward.
+
 Odin uses `import content "sdk:content"`, `content.size(id)` and
 `content.read(id, offset, destination)` with a caller-owned `[]u8`. Luau uses
 `byt.content.size(id)` and `byt.content.read(id, offset, destination)` with a
