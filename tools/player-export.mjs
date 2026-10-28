@@ -2,7 +2,7 @@ import { cp, mkdir, readFile, stat, utimes, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { dirname, resolve } from "node:path";
 import { execFileSync } from "node:child_process";
-import { copyAtomic } from "./atomic-file.mjs";
+import { copyAtomic, isTemporary } from "./atomic-file.mjs";
 import {
   emscriptenRoot,
   nativePlayer,
@@ -168,7 +168,10 @@ export async function exportPlayer({ platform, source, target, luau = false, sig
   }
   await checkFiles(entries);
   // Preserve additional notices, then let the selected dependencies' notices win.
-  await cp(resolve(source, "licenses"), resolve(target, "licenses"), { recursive: true });
+  await cp(resolve(source, "licenses"), resolve(target, "licenses"), {
+    recursive: true,
+    filter: (path) => !isTemporary(path),
+  });
   await copyFiles(target, entries);
   if (platform === "native") {
     await sign(target);

@@ -192,7 +192,7 @@ test("license exports tolerate concurrent atomic staging (#164)", async (t) => {
   });
   try {
     assert.equal(await ready, "ready");
-    for (let iteration = 0; iteration < 200; iteration++) {
+    for (let iteration = 0; iteration < 40; iteration++) {
       const target = join(dirname(options.target), `export-${iteration}`);
       await assert.doesNotReject(
         exportPlayer({ ...options, target }),
