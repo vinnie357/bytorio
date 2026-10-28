@@ -1,3 +1,5 @@
+import { spawn } from "node:child_process";
+import { readFileSync, rmSync } from "node:fs";
 import { copyFile } from "node:fs/promises";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -6,14 +8,80 @@ import { timedSpawnSync as spawnSync } from "./command-timing.mjs";
 export const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const mise = process.env.MISE_BIN || "mise";
 const paths = new Map();
+export const commandTimeout = 120000;
+
+const timeoutWatchdog = `
+sleep "$1"
+mkdir -p "$2"
+for pid in $(pgrep -P "$3"); do
+  if [ "$pid" = "$$" ]; then
+    continue
+  fi
+  ps -o pid=,stat=,etime=,time=,rss=,command= -p "$pid" >> "$4"
+  if command -v sample >/dev/null 2>&1; then
+    sample "$pid" 2 >> "$4" 2>&1
+  fi
+done
+`;
+
 export function run(executable, args, options = {}) {
-  const result = spawnSync(executable, args, {
+  const settings = {
     cwd: repo,
     encoding: "utf8",
-    timeout: 120000,
+    timeout: commandTimeout,
     maxBuffer: 16 * 1024 * 1024,
     ...options,
-  });
+  };
+  const folder =
+    process.env.BYTORIO_COMMAND_TIMEOUT_REPORTS || resolve(repo, "build/command-timeouts");
+  const report = resolve(
+    folder,
+    `${new Date().toISOString().replaceAll(":", "-")}-${process.pid}.txt`,
+  );
+  let watchdog;
+  const started = Date.now();
+  if (settings.timeout && process.platform !== "win32") {
+    const delay = (settings.timeout - Math.min(10000, settings.timeout / 2)) / 1000;
+    watchdog = spawn(
+      "/bin/sh",
+      ["-c", timeoutWatchdog, "watchdog", String(delay), folder, String(process.pid), report],
+      { detached: true, stdio: "ignore" },
+    );
+    watchdog.unref();
+  }
+  // spawnSync reports failures in its result rather than throwing, so the watchdog is always stopped.
+  const result = spawnSync(executable, args, settings);
+  if (watchdog?.pid) {
+    try {
+      // Kill sleep and sample too, so successful commands leave no watchdog children.
+      process.kill(-watchdog.pid, "SIGKILL");
+    } catch (error) {
+      if (error.code !== "ESRCH") {
+        throw error;
+      }
+    }
+  }
+  if (result.error?.code === "ETIMEDOUT") {
+    let evidence;
+    try {
+      evidence = readFileSync(report, "utf8")
+        .split("\n")
+        .filter((line) => /^\s*\d+\s+\S+\s+[\d:-]+\s+[\d:.]+\s+\d+\s+/.test(line))
+        .join("\n");
+      evidence ||= "No process evidence was captured.";
+    } catch (error) {
+      if (error.code !== "ENOENT") {
+        throw error;
+      }
+      evidence = "Timeout report is missing; the watchdog did not capture process evidence.";
+    }
+    throw new Error(
+      `${result.error.message} after ${Date.now() - started} ms\n${evidence}\nreport: ${report}`,
+    );
+  }
+  if (watchdog) {
+    rmSync(report, { force: true });
+  }
   if (result.error || result.status !== 0) {
     throw new Error(
       result.error?.message ||
