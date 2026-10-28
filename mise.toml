@@ -292,6 +292,8 @@ run = [
   {task = "test:bundle-strip"},
   {task = "test:player-build-concurrent"},
   {task = "test:player-export"},
+  {task = "test:format-cache"},
+  {task = "test:command-timeout"},
     {task = "test:cli"},
   {task = "test:sdk"},
   {task = "test:save"},
@@ -334,6 +336,14 @@ run = "node --test tools/validation-runner.test.mjs tools/frame-clock.test.mjs t
 [tasks."test:player-export"]
 description = "Verify complete player exports and missing-dependency failures"
 run = "node --test tools/player-export.test.mjs"
+
+[tasks."test:format-cache"]
+description = "Verify formatter cache hits, concurrent callers and stale locks"
+run = "node --test tools/format-cache.test.mjs"
+
+[tasks."test:command-timeout"]
+description = "Verify command timeout evidence and watchdog cleanup"
+run = "node --test tools/command-timeout.test.mjs"
 
 [tasks."test:drawing"]
 run = "node experiments/luau-executor/verify-drawing.mjs"

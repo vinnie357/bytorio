@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, readdir, unlink, writeFile } from "node:fs/promises";
+import { spawn } from "node:child_process";
+import { mkdir, mkdtemp, readFile, readdir, rm, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { test } from "node:test";
 import { exportPlayer, stagePlayerSupport } from "./player-export.mjs";
-import { nativePlayer, sdlLibraryName, windowsHost } from "./toolchain.mjs";
+import { nativePlayer, repo, sdlLibraryName, windowsHost } from "./toolchain.mjs";
 
 // Fixture bytes are not Mach-O, so skip real signing.
 const sign = async () => {};
@@ -129,4 +130,86 @@ test("export rejects unsupported hosts and exporting over its source", async () 
   const options = await fixture("web");
   await assert.rejects(exportPlayer({ ...options, platform: "unknown" }), /platform/);
   await assert.rejects(exportPlayer({ ...options, target: options.source }), /must differ/);
+});
+
+async function assertNoTemporaryNotices(target) {
+  const entries = await readdir(join(target, "licenses"), { recursive: true });
+  assert.deepEqual(
+    entries.filter((name) => name.split(/[\\/]/).some((part) => part.startsWith(".tmp-"))),
+    [],
+    "atomic staging folders must never be exported",
+  );
+}
+
+test("license exports skip stale atomic staging folders (#164)", async (t) => {
+  const options = await fixture("native");
+  t.after(() => rm(dirname(options.source), { recursive: true, force: true }));
+  await put(options.source, "licenses/.tmp-deadbeef/unfinished.txt", "partial notice");
+  await exportPlayer(options);
+  await assertNoTemporaryNotices(options.target);
+  assert.equal(
+    await readFile(join(options.target, "licenses/odin.txt"), "utf8"),
+    await readFile(join(options.source, "licenses/odin.txt"), "utf8"),
+  );
+});
+
+test("license exports tolerate concurrent atomic staging (#164)", async (t) => {
+  const options = await fixture("native");
+  t.after(() => rm(dirname(options.source), { recursive: true, force: true }));
+  const notice = join(dirname(options.source), "notice.txt");
+  await writeFile(notice, "additional license notice\n".repeat(4096));
+  // Separate event loops let staging remove folders while cp is traversing them.
+  const script = `
+    import { copyAtomic } from "./tools/atomic-file.mjs";
+    import { join } from "node:path";
+    let stopped = false;
+    process.on("message", () => { stopped = true; });
+    const notice = ${JSON.stringify(notice)};
+    const licenses = ${JSON.stringify(join(options.source, "licenses"))};
+    const stage = () => Promise.all(Array.from({ length: 16 }, (_, index) =>
+      copyAtomic(notice, join(licenses, "extra-" + index + ".txt"))));
+    await stage();
+    process.send("ready");
+    while (!stopped) {
+      await stage();
+    }
+    process.disconnect();
+  `;
+  const worker = spawn(process.execPath, ["--input-type=module", "-e", script], {
+    cwd: repo,
+    stdio: ["ignore", "ignore", "pipe", "ipc"],
+  });
+  let stderr = "";
+  worker.stderr.setEncoding("utf8").on("data", (chunk) => (stderr += chunk));
+  const completed = new Promise((resolve, reject) => {
+    worker.once("error", reject);
+    worker.once("close", (code) => resolve(code));
+  });
+  const ready = new Promise((resolve, reject) => {
+    worker.once("message", resolve);
+    worker.once("error", reject);
+    worker.once("close", (code) => reject(new Error(`staging exited ${code}: ${stderr}`)));
+  });
+  try {
+    assert.equal(await ready, "ready");
+    for (let iteration = 0; iteration < 200; iteration++) {
+      const target = join(dirname(options.target), `export-${iteration}`);
+      await assert.doesNotReject(
+        exportPlayer({ ...options, target }),
+        `export ${iteration} must tolerate concurrent license staging`,
+      );
+      await assertNoTemporaryNotices(target);
+      await rm(target, { recursive: true, force: true });
+    }
+  } finally {
+    try {
+      if (worker.connected) {
+        await new Promise((resolve, reject) => {
+          worker.send("stop", (error) => (error ? reject(error) : resolve()));
+        });
+      }
+    } finally {
+      assert.equal(await completed, 0, stderr);
+    }
+  }
 });

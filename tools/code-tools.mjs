@@ -31,6 +31,10 @@ function formatOnce(source, filename) {
   }
   return source;
 }
+export function formatCacheKey(source, filename) {
+  throw new Error("not implemented");
+}
+
 export function formatSource(source, filename) {
   // Long type annotations can need a second layout pass. Require a stable result
   // so generation and --check agree, and bound recovery for formatter regressions.
