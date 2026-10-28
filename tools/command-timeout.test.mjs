@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setImmediate } from "node:timers/promises";
 import { test } from "node:test";
-import { run } from "./toolchain.mjs";
+import { repo, run } from "./toolchain.mjs";
 
 const posix = { skip: process.platform === "win32" };
 
@@ -44,6 +44,32 @@ function reportFiles(folder) {
   }
 }
 
+function pids(args) {
+  const result = spawnSync("pgrep", args, { encoding: "utf8" });
+  assert.equal(result.error, undefined);
+  assert.ok(result.status === 0 || result.status === 1, result.stderr);
+  return result.stdout
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(Number)
+    .filter((pid) => pid !== result.pid);
+}
+
+// Children of this process, zombies included: pgrep skips zombies, and an unreaped watchdog is one.
+function children() {
+  const result = spawnSync("ps", ["-axo", "pid=,ppid="], { encoding: "utf8" });
+  assert.equal(result.error, undefined);
+  return result.stdout
+    .split("\n")
+    .map((line) => line.trim().split(/\s+/).map(Number))
+    .filter(([pid, parent]) => parent === process.pid && pid !== result.pid)
+    .map(([pid]) => pid);
+}
+
+function watchdogs(pid = process.pid) {
+  return pids(["-f", `bytorio-watchdog-${pid}`]);
+}
+
 test("timeouts retain process evidence without retrying", posix, (t) => {
   const { reports, timings } = scratch(t);
   const script = "setTimeout(() => {}, 60000)";
@@ -76,22 +102,108 @@ test("timeouts retain process evidence without retrying", posix, (t) => {
   const contents = readFileSync(report, "utf8");
   assert.match(contents, psLine);
   assert.ok(contents.includes(evidence[1]), "the report must identify the stalled child");
+  if (process.platform === "darwin") {
+    assert.match(failure.message, /Call graph:[^\n]*\n(?:[ \t]*\n)*[ \t]+\S[^\n]*/);
+  }
+  assert.equal(
+    failure.message.trimEnd().split("\n").at(-1),
+    `stuck: ${evidence[0].trim()} | report: ${report}`,
+  );
 });
 
-test("successful commands leave no reports or watchdogs", posix, async (t) => {
-  const { reports } = scratch(t);
-  assert.equal(run(process.execPath, ["-e", ""], { timeout: 3000 }), "");
+test("a synchronous loop of commands leaves no child processes", posix, (t) => {
+  scratch(t);
+  for (let index = 0; index < 30; index++) {
+    assert.equal(run(process.execPath, ["-e", ""], { timeout: 3000 }), "");
+  }
+  const left = children();
+  const remaining = watchdogs();
+  assert.deepEqual(left, [], "synchronous calls must leave no children to reap");
+  assert.deepEqual(remaining, [], "synchronous calls must stop their watchdogs");
+});
+
+test("a command that throws before running stops its watchdog", posix, async (t) => {
+  scratch(t);
+  const previous = new Set(pids(["-P", String(process.pid)]));
+  t.after(() => {
+    const remaining = new Set([
+      ...watchdogs(),
+      ...pids(["-P", String(process.pid)]).filter((pid) => !previous.has(pid)),
+    ]);
+    for (const pid of remaining) {
+      try {
+        process.kill(-pid, "SIGKILL");
+      } catch (error) {
+        if (error.code !== "ESRCH") {
+          throw error;
+        }
+      }
+    }
+  });
+  assert.throws(() => run(process.execPath, ["-e", "", "a\u0000b"], { timeout: 3000 }), {
+    code: "ERR_INVALID_ARG_VALUE",
+  });
+  const children = pids(["-P", String(process.pid)]).filter((pid) => !previous.has(pid));
   const deadline = Date.now() + 2000;
-  let children;
+  let remaining;
   do {
-    children = spawnSync("pgrep", ["-P", String(process.pid)], { encoding: "utf8" });
-    assert.equal(children.error, undefined);
-    assert.ok(children.status === 0 || children.status === 1, children.stderr);
-    if (children.status === 1) {
+    remaining = watchdogs();
+    if (remaining.length === 0) {
       break;
     }
     await setImmediate();
   } while (Date.now() < deadline);
-  assert.equal(children.stdout.trim(), "", "watchdog children must be reaped");
+  assert.deepEqual(remaining, [], "argument validation failures must stop the watchdog");
+  assert.deepEqual(children, [], "argument validation failures must leave no watchdog children");
+});
+
+test("a running command has a marked watchdog that stops on completion", posix, async (t) => {
+  scratch(t);
+  const worker = spawn(
+    process.execPath,
+    [
+      "--input-type=module",
+      "-e",
+      `
+        import { run } from "./tools/toolchain.mjs";
+        run(process.execPath, ["-e", "setTimeout(() => {}, 1500)"], { timeout: 30000 });
+      `,
+    ],
+    { cwd: repo, stdio: ["ignore", "pipe", "pipe"] },
+  );
+  let stderr = "";
+  worker.stdout.resume();
+  worker.stderr.setEncoding("utf8").on("data", (chunk) => (stderr += chunk));
+  const completed = new Promise((resolve, reject) => {
+    worker.once("error", reject);
+    worker.once("close", (code, signal) => resolve({ code, signal }));
+  });
+  t.after(async () => {
+    if (worker.exitCode === null && worker.signalCode === null) {
+      worker.kill();
+    }
+    await completed;
+  });
+  const deadline = Date.now() + 2000;
+  let marked;
+  do {
+    marked = watchdogs(worker.pid);
+    if (marked.length > 0 || worker.exitCode !== null || worker.signalCode !== null) {
+      break;
+    }
+    await setImmediate();
+  } while (Date.now() < deadline);
+  const result = await completed;
+  const remaining = watchdogs(worker.pid);
+  assert.ok(marked.length > 0, "a running command must expose its watchdog marker");
+  assert.equal(result.code, 0, stderr);
+  assert.equal(result.signal, null);
+  assert.deepEqual(remaining, [], "the marked watchdog must stop before run returns");
+});
+
+test("successful commands leave no reports or watchdogs", posix, (t) => {
+  const { reports } = scratch(t);
+  assert.equal(run(process.execPath, ["-e", ""], { timeout: 3000 }), "");
+  assert.deepEqual(watchdogs(), [], "successful commands must stop their watchdogs synchronously");
   assert.deepEqual(reportFiles(reports), []);
 });
