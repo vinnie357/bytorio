@@ -1,4 +1,3 @@
-import { spawn } from "node:child_process";
 import { readFileSync, rmSync } from "node:fs";
 import { copyFile } from "node:fs/promises";
 import { resolve, dirname } from "node:path";
@@ -18,10 +17,18 @@ for pid in $(pgrep -P "$3"); do
     continue
   fi
   ps -o pid=,stat=,etime=,time=,rss=,command= -p "$pid" >> "$4"
+  # Without -file, sample writes its analysis to a file of its own under /tmp.
   if command -v sample >/dev/null 2>&1; then
-    sample "$pid" 2 >> "$4" 2>&1
+    sample "$pid" 1 -file "$4.sample" >/dev/null 2>&1 && cat "$4.sample" >> "$4"
+    rm -f "$4.sample"
   fi
 done
+`;
+// Job control isolates the watchdog group; exec preserves its marker in argv.
+const watchdogLauncher = `
+set -m
+( exec /bin/sh -c "$1" "$0" "$2" "$3" "$4" "$5" ) </dev/null >/dev/null 2>&1 &
+printf '%s\\n' "$!"
 `;
 
 export function run(executable, args, options = {}) {
@@ -42,41 +49,57 @@ export function run(executable, args, options = {}) {
   const started = Date.now();
   if (settings.timeout && process.platform !== "win32") {
     const delay = (settings.timeout - Math.min(10000, settings.timeout / 2)) / 1000;
-    watchdog = spawn(
+    const launched = spawnSync(
       "/bin/sh",
-      ["-c", timeoutWatchdog, "watchdog", String(delay), folder, String(process.pid), report],
-      { detached: true, stdio: "ignore" },
+      [
+        "-c",
+        watchdogLauncher,
+        `bytorio-watchdog-${process.pid}`,
+        timeoutWatchdog,
+        String(delay),
+        folder,
+        String(process.pid),
+        report,
+      ],
+      { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
     );
-    watchdog.unref();
+    watchdog = Number(launched.stdout?.trim()) || undefined;
   }
-  // spawnSync reports failures in its result rather than throwing, so the watchdog is always stopped.
-  const result = spawnSync(executable, args, settings);
-  if (watchdog?.pid) {
-    try {
-      // Kill sleep and sample too, so successful commands leave no watchdog children.
-      process.kill(-watchdog.pid, "SIGKILL");
-    } catch (error) {
-      if (error.code !== "ESRCH") {
-        throw error;
+  let result;
+  try {
+    result = spawnSync(executable, args, settings);
+  } finally {
+    if (watchdog) {
+      try {
+        // Kill sleep and sample too, without replacing a command's error.
+        process.kill(-watchdog, "SIGKILL");
+      } catch {
+        // Already gone; never replace the command's own error.
       }
     }
   }
   if (result.error?.code === "ETIMEDOUT") {
-    let evidence;
+    let contents = "";
     try {
-      evidence = readFileSync(report, "utf8")
-        .split("\n")
-        .filter((line) => /^\s*\d+\s+\S+\s+[\d:-]+\s+[\d:.]+\s+\d+\s+/.test(line))
-        .join("\n");
-      evidence ||= "No process evidence was captured.";
+      contents = readFileSync(report, "utf8");
     } catch (error) {
       if (error.code !== "ENOENT") {
         throw error;
       }
-      evidence = "Timeout report is missing; the watchdog did not capture process evidence.";
     }
+    const lines = contents.split("\n");
+    const evidence = lines.filter((line) =>
+      /^\s*\d+\s+\S+\s+[\d:-]+\s+[\d:.]+\s+\d+\s+/.test(line),
+    );
+    const graph = lines.findIndex((line) => line.includes("Call graph:"));
+    const summary = evidence.map((line) => line.trim()).join("; ");
     throw new Error(
-      `${result.error.message} after ${Date.now() - started} ms\n${evidence}\nreport: ${report}`,
+      [
+        `${result.error.message} after ${Date.now() - started} ms`,
+        ...evidence,
+        ...(graph < 0 ? [] : lines.slice(graph, graph + 26)),
+        `stuck: ${summary || "no process evidence was captured"} | report: ${report}`,
+      ].join("\n"),
     );
   }
   if (watchdog) {

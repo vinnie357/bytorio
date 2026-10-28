@@ -6,17 +6,16 @@ import {
   renameSync,
   rmSync,
   statSync,
+  utimesSync,
   writeFileSync,
 } from "node:fs";
 import { resolve, extname, relative } from "node:path";
 import { commandTimeout, repo, run, tool } from "./toolchain.mjs";
 const cppExtensions = [".cpp", ".cc", ".cxx", ".h", ".hpp", ".hh", ".hxx"];
+const formatterHashes = new Map();
 
 function formatter(filename) {
   const extension = extname(filename);
-  if (cppExtensions.includes(extension)) {
-    return ["clang-format", ".clang-format"];
-  }
   if (extension === ".odin") {
     return ["odinfmt", "odinfmt.json"];
   }
@@ -61,13 +60,17 @@ export function formatCacheKey(source, filename) {
   }
   const [name, config] = selected;
   const executable = resolve(tool(name));
-  const { size, mtimeMs } = statSync(executable);
+  if (!formatterHashes.has(executable)) {
+    formatterHashes.set(
+      executable,
+      createHash("sha256").update(readFileSync(executable)).digest("hex"),
+    );
+  }
   return createHash("sha256")
     .update(
       JSON.stringify([
         executable,
-        size,
-        mtimeMs,
+        formatterHashes.get(executable),
         readFileSync(resolve(repo, config), "utf8"),
         filename,
         source.replaceAll("\r\n", "\n"),
@@ -76,9 +79,20 @@ export function formatCacheKey(source, filename) {
     .digest("hex");
 }
 
-function cached(path) {
+function cached(path, refresh = false) {
   try {
-    return readFileSync(path, "utf8");
+    const contents = readFileSync(path, "utf8");
+    if (refresh) {
+      const now = new Date();
+      try {
+        utimesSync(path, now, now);
+      } catch (error) {
+        if (error.code !== "ENOENT") {
+          throw error;
+        }
+      }
+    }
+    return contents;
   } catch (error) {
     if (error.code !== "ENOENT") {
       throw error;
@@ -86,7 +100,7 @@ function cached(path) {
   }
 }
 
-function stale(lock, graceMs = 5000) {
+function stale(lock) {
   const pid = Number(cached(resolve(lock, "pid")));
   if (pid > 0) {
     try {
@@ -96,43 +110,37 @@ function stale(lock, graceMs = 5000) {
     }
     return false;
   }
-  try {
-    return Date.now() - statSync(lock).mtimeMs > graceMs;
-  } catch (error) {
-    if (error.code !== "ENOENT") {
-      throw error;
-    }
-    return false;
-  }
+  return true;
 }
 
-function takeOver(lock) {
-  const gate = `${lock}.takeover`;
-  try {
-    mkdirSync(gate);
-  } catch (error) {
-    if (error.code !== "EEXIST") {
-      throw error;
+function pruneCache(folder) {
+  const now = Date.now();
+  for (const name of readdirSync(folder)) {
+    const age = /^[a-f0-9]{64}$/.test(name)
+      ? 7 * 24 * 60 * 60 * 1000
+      : name.endsWith(".tmp")
+        ? 60 * 60 * 1000
+        : undefined;
+    if (age === undefined) {
+      continue;
     }
-    if (stale(gate, 10000)) {
-      rmSync(gate, { recursive: true, force: true });
+    const path = resolve(folder, name);
+    try {
+      if (now - statSync(path).mtimeMs > age) {
+        rmSync(path, { recursive: true, force: true });
+      }
+    } catch (error) {
+      if (error.code !== "ENOENT") {
+        throw error;
+      }
     }
-    return;
-  }
-  try {
-    // Recheck under the gate so competing waiters cannot remove a new owner's lock.
-    if (stale(lock)) {
-      rmSync(lock, { recursive: true, force: true });
-    }
-  } finally {
-    rmSync(gate, { recursive: true, force: true });
   }
 }
 
 export function formatSource(source, filename) {
   const key = formatCacheKey(source, filename);
   if (!key) {
-    return source;
+    return cppExtensions.includes(extname(filename)) ? convergeSource(source, filename) : source;
   }
   const folder = process.env.BYTORIO_FORMAT_CACHE || resolve(repo, "build/format-cache");
   mkdirSync(folder, { recursive: true });
@@ -144,29 +152,37 @@ export function formatSource(source, filename) {
   let temporary;
   try {
     while (true) {
-      const hit = cached(entry);
+      const hit = cached(entry, true);
       if (hit !== undefined) {
         return hit;
       }
+      const candidate = `${lock}.${randomUUID()}.tmp`;
+      mkdirSync(candidate);
       try {
-        mkdirSync(lock);
-        owned = true;
-        writeFileSync(resolve(lock, "pid"), String(process.pid));
-        break;
-      } catch (error) {
-        if (error.code !== "EEXIST" || owned) {
-          throw error;
+        writeFileSync(resolve(candidate, "pid"), String(process.pid));
+        try {
+          renameSync(candidate, lock);
+          owned = true;
+          break;
+        } catch (error) {
+          if (!["ENOTEMPTY", "EEXIST", "EPERM"].includes(error.code)) {
+            throw error;
+          }
         }
+      } finally {
+        rmSync(candidate, { recursive: true, force: true });
       }
       if (Date.now() >= deadline) {
         break;
       }
       if (stale(lock)) {
-        takeOver(lock);
+        // Locks avoid duplicate work; racing formatters atomically publish identical bytes.
+        rmSync(lock, { recursive: true, force: true });
+        continue;
       }
       Atomics.wait(pause, 0, 0, 25);
     }
-    const hit = cached(entry);
+    const hit = cached(entry, true);
     if (hit !== undefined) {
       return hit;
     }
@@ -174,6 +190,7 @@ export function formatSource(source, filename) {
     temporary = resolve(folder, `${key}.${randomUUID()}.tmp`);
     writeFileSync(temporary, result);
     renameSync(temporary, entry);
+    pruneCache(folder);
     return result;
   } finally {
     if (temporary) {

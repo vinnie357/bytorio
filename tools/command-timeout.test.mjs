@@ -57,13 +57,13 @@ function pids(args) {
 
 // Children of this process, zombies included: pgrep skips zombies, and an unreaped watchdog is one.
 function children() {
-  const result = spawnSync("ps", ["-axo", "pid=,ppid="], { encoding: "utf8" });
+  const result = spawnSync("ps", ["-axo", "pid=,ppid=,command="], { encoding: "utf8" });
   assert.equal(result.error, undefined);
   return result.stdout
     .split("\n")
-    .map((line) => line.trim().split(/\s+/).map(Number))
-    .filter(([pid, parent]) => parent === process.pid && pid !== result.pid)
-    .map(([pid]) => pid);
+    .map((line) => line.trim().split(/\s+/))
+    .filter(([pid, parent]) => Number(parent) === process.pid && Number(pid) !== result.pid)
+    .map(([pid, , ...command]) => `${pid} ${command.join(" ")}`);
 }
 
 function watchdogs(pid = process.pid) {
@@ -76,7 +76,7 @@ test("timeouts retain process evidence without retrying", posix, (t) => {
   const started = Date.now();
   let failure;
   try {
-    run(process.execPath, ["-e", script], { timeout: 3000 });
+    run(process.execPath, ["-e", script], { timeout: 8000 });
   } catch (error) {
     failure = error;
   }
@@ -90,7 +90,7 @@ test("timeouts retain process evidence without retrying", posix, (t) => {
   assert.match(failure.message, /spawnSync .* ETIMEDOUT/);
   assert.match(failure.message, /setTimeout/);
   assert.match(failure.message, /\b\d+(?:\.\d+)?\s*ms\b/);
-  assert.ok(Date.now() - started >= 2500);
+  assert.ok(Date.now() - started >= 7500);
   // ps fields include PID, state, elapsed time, CPU time and RSS before the command.
   const psLine = /^\s*(\d+)\s+[A-Za-z][A-Za-z+<Ns-]*\s+[\d:-]+\s+[\d:.]+\s+\d+\s+.*setTimeout.*$/m;
   const evidence = failure.message.match(psLine);
