@@ -146,6 +146,7 @@ export_batch :: proc(e: ^Engine, destination: []u8) -> int {
     if bytes > len(destination) { return -bytes }
     put(destination, 0, PACKET_MAGIC); put(destination, 4, batch.count)
     put(destination, 8, u32(bytes)); put(destination, 12, 0)
+    put64(destination, w.audioPacketSimulationFrameOffset, batch.simulation_frame)
     cursor := w.audioPacketHeaderBytes + int(batch.count) * w.audioEventBytes
     for c, i in batch.commands[:batch.count] {
         size := int(c.frames * c.channels) * 4 if c.lease != 0 else 0
@@ -172,6 +173,8 @@ import_batch :: proc(e: ^Engine, bytes: []u8) -> bool {
        word(bytes, 0) != PACKET_MAGIC ||
        word(bytes, 8) != u32(len(bytes)) ||
        word(bytes, 12) != 0 { return false }
+    simulation_frame := wide(bytes, w.audioPacketSimulationFrameOffset)
+    if simulation_frame > w.audioMaxExactFrame { return false }
     count := word(bytes, 4)
     start := w.audioPacketHeaderBytes + u64(count) * w.audioEventBytes
     if count == 0 ||
@@ -221,6 +224,7 @@ import_batch :: proc(e: ^Engine, bytes: []u8) -> bool {
     }
     batch := &e.batches[e.head % w.maxAudioBatches]
     batch.count = count
+    batch.simulation_frame = simulation_frame
     for i in 0 ..< int(count) {
         b := bytes[w.audioPacketHeaderBytes + i * w.audioEventBytes:][:w.audioEventBytes]
         c := decode(b)

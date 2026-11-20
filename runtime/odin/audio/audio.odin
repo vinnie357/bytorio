@@ -17,8 +17,9 @@ Command :: struct {
     parameter, ramp:                                    u32,
 }
 Batch :: struct {
-    count:    u32,
-    commands: [w.maxAudioEvents]Command,
+    simulation_frame: u64,
+    count:            u32,
+    commands:         [w.maxAudioEvents]Command,
 }
 Lease :: struct {
     page, pages: u32,
@@ -106,6 +107,7 @@ Engine :: struct {
     graphs:                                                                               [w.maxInstruments]Graph,
     frame, processed_local, late_local, underruns_local, rejected_local, completed_local: u64,
     lead_remaining:                                                                       u32,
+    simulation_frame:                                                                     u64,
     paused:                                                                               bool,
     fade:                                                                                 Ramp,
     lead_phase:                                                                           f64,
@@ -198,6 +200,7 @@ begin :: proc(e: ^Engine) -> (Transaction, bool) {
     if producer_batches_available(e) == 0 { return {}, false }
     batch := &e.batches[head % w.maxAudioBatches]
     batch.count = 0
+    batch.simulation_frame = 0
     return {engine = e, batch = batch, model = e.model, head = head, active = true}, true
 }
 abort :: proc(t: ^Transaction) {
@@ -331,6 +334,7 @@ consume :: proc(e: ^Engine) {
     tail, head := e.tail, load(&e.head)
     for tail != head {
         batch := &e.batches[tail % w.maxAudioBatches]
+        e.simulation_frame = max(e.simulation_frame, batch.simulation_frame)
         for c in batch.commands[:batch.count] { push(e, c) }
         tail += 1
     }
@@ -564,6 +568,10 @@ render :: proc(e: ^Engine, output: []f32, rate: u32 = w.audioRate) {
         store(&e.epoch, e.epoch + 1)
         if !requested { e.lead_remaining = w.audioLeadFrames; e.lead_phase = 0 }
         set_ramp(&e.fade, 0 if requested else 1, w.audioPauseFadeFrames)
+    }
+    if e.lead_remaining > 0 && e.simulation_frame > e.frame {
+        e.frame = e.simulation_frame
+        e.device_ready = false
     }
     for i in 0 ..< len(output) / 2 {
         pair: [2]f32

@@ -254,6 +254,8 @@ export const resourceSchema = Object.freeze({
   maxAudioEvents: 4096,
   maxAudioBatches: 8,
   audioLeadFrames: 2400,
+  audioPacketHeaderBytes: 24,
+  audioPacketSimulationFrameOffset: 16,
   audioHorizonFrames: 96000,
   maxAudioSnapshotBytes: 8388608,
   audioPageFrames: 256,
@@ -391,8 +393,7 @@ export const resourceSchema = Object.freeze({
   mailboxCapacity: 1049168,
   maxAudioLeases: 5464,
   maxAudioDoneRecords: 9576,
-  audioPacketHeaderBytes: 16,
   audioEventBytes: 96,
-  maxAudioPacketBytes: 8781840,
+  maxAudioPacketBytes: 8781848,
   maxAudioFeedbackBytes: 306512,
 });

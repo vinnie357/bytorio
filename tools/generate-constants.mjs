@@ -52,7 +52,6 @@ constants.maxAudioLeases =
   schema.maxInstruments +
   schema.maxBuses;
 constants.maxAudioDoneRecords = constants.maxAudioLeases + schema.maxAudioEvents + schema.maxVoices;
-constants.audioPacketHeaderBytes = 16;
 constants.audioEventBytes = 96;
 constants.maxAudioPacketBytes =
   constants.audioPacketHeaderBytes +
