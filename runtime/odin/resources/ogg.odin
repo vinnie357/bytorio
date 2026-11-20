@@ -175,6 +175,7 @@ ogg_feed :: proc(r: ^Registry, index, id: u32, at: u64, pcm: []f32) -> bool {
         ) { return false }
         next.ended = true
     }
+    transaction.batch.simulation_frame = r.tick * w.audioFramesPerTick
     audio.publish(&transaction)
     r.ogg[index] = next
     committed = true
