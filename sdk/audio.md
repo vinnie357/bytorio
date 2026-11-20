@@ -114,8 +114,10 @@ unrendered frame and increments `late_events`; playback starts at source zero.
 A late stream write is rejected rather than replaying old PCM.
 
 An initial 2,400-frame / 50 ms lead holds logical time while output begins with
-silence. Browser audio unlock requires a gesture. Pause fades output, freezes
-DSP, and increments the audio epoch; resume inserts a fresh lead and fades back
+silence. At startup and resume, the renderer anchors to the newest delivered
+simulation frame throughout the lead, moving only forward. Browser audio unlock
+requires a gesture. Pause fades output, freezes DSP, and increments the audio
+epoch; resume inserts a fresh lead and fades back
 into the same voices. Reload replaces the entire audio session. Lead is a
 scheduling allowance, not measured speaker latency or a guarantee for all devices.
 

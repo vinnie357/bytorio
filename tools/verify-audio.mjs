@@ -599,7 +599,7 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/harness.html`);
   for (const language of ["odin", "luau"]) {
     const result = await page.evaluate(
-      async ({ language }) => {
+      async ({ language, limits }) => {
         const base = `./${language}/build/web/`;
         await (await fetch(`${base}audio.wasm`)).arrayBuffer();
         const context = new AudioContext({ sampleRate: 48000 });
@@ -638,6 +638,21 @@ try {
           }
         };
         const packet = await (await fetch(`${base}prepared-audio.bin`)).arrayBuffer();
+        const simulationFrame = 43200;
+        const packetView = new DataView(packet);
+        packetView.setBigUint64(
+          limits.audioPacketSimulationFrameOffset,
+          BigInt(simulationFrame),
+          true,
+        );
+        for (let i = 0; i < packetView.getUint32(4, true); i++) {
+          const at = limits.audioPacketHeaderBytes + i * limits.audioEventBytes;
+          packetView.setBigUint64(
+            at,
+            packetView.getBigUint64(at, true) + BigInt(simulationFrame),
+            true,
+          );
+        }
         mixer.port.postMessage(
           { type: "packet", id: 0, buffer: packet, bytes: packet.byteLength },
           [packet],
@@ -679,6 +694,7 @@ try {
         return {
           pcm: Array.from(new Float32Array(pcm)),
           before,
+          simulationFrame,
           after,
           paused,
           stillPaused,
@@ -688,10 +704,14 @@ try {
           isolated: crossOriginIsolated,
         };
       },
-      { language },
+      { language, limits },
     );
     assert.equal(result.error, "");
     assert.equal(result.isolated, false);
+    assert.ok(
+      result.before >= result.simulationFrame,
+      "delayed mixer anchors feedback to simulation",
+    );
     assert.ok(result.after - result.before > 20000, "worklet survives main-thread stall");
     assert.equal(result.paused, result.stillPaused, "pause freezes logical DSP time after fade");
     assert.ok(
