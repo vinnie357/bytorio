@@ -54,6 +54,9 @@ export const sections = [
       ["sdk/synthesis.md", "Synthesis & effects"],
       ["sdk/save.md", "Save progress"],
       ["sdk/text-input.md", "Text input"],
+      ["sdk/web-player.md", "Embed the web player"],
+      ["sdk/web-runtime.md", "Build a custom player"],
+      ["docs/native-player.md", "Native player"],
       ["docs/display-modes.md", "Display modes"],
       ["docs/png-cartridges.md", "PNG cartridges"],
     ],
@@ -92,4 +95,5 @@ export const publicDocuments = [
   "docs/indexed-content.md",
   "docs/resource-av-spec.md",
   "docs/textured-3d.md",
+  "docs/mise-installation.md",
 ];

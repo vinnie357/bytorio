@@ -5,6 +5,10 @@ historical status statements. Use the [architecture overview](architecture.md)
 and [decision records](adr/README.md) for current architectural choices, and the
 area specifications for current contracts and supported capabilities.
 
+Standalone authoring and SDK/player distribution follow the
+[authoring specification](internal/standalone-authoring-spec.md) and its
+[implementation plan](internal/standalone-authoring-plan.md).
+
 Status: updated 2026-10-19. **Luau is the default cartridge language; Odin cartridges are also supported.** The runtime remains Odin. [SDK 0.2.0](../sdk/README.md) publishes the shared [resource profile](resource-profile.md), retaining the [ABI 1 adapter](cartridge-spec.md). The C++ reference player is retired; C++ remains only for Luau support. Larger indexed ROMs and 3D remain later work.
 
 Keep the standalone native requirement, browser target, single display with 640×360 and 320×180 modes, mostly 2D scope, approximate 128/512 MB package goals, and complete PNG cartridges. The [DS/3DS comparison](target-comparison.md) is advisory; the language change does not expand fidelity scope. The product is Bytorio, its website is https://bytor.io, and its developer CLI is `byt`. Product metadata lives in `package.json`; protocol and SDK names remain compatible.

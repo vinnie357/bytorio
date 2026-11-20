@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Custom Bytorio player</title>
+  <link rel="icon" href="data:," />
+  <style>
+    body {
+      margin: 2rem auto;
+      max-width: 48rem;
+      padding: 0 1rem;
+      color: #eee;
+      background: #181b22;
+      font: 1rem system-ui;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      background: #000;
+      image-rendering: pixelated;
+      touch-action: none;
+    }
+    canvas:focus-visible {
+      outline: 3px solid #91c9ff;
+    }
+    nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin: 1rem 0;
+    }
+    button {
+      padding: 0.5rem 1rem;
+      font: inherit;
+    }
+    #status {
+      min-height: 1.5em;
+    }
+  </style>
+  <h1>My game</h1>
+  <canvas
+    id="game"
+    width="640"
+    height="360"
+    tabindex="0"
+    aria-label="Game. Arrows or WASD move; Space performs the action."
+  ></canvas>
+  <nav aria-label="Game controls">
+    <button id="play" disabled>Play</button>
+    <button id="action" disabled>Action</button>
+    <button id="mute" aria-pressed="false">Mute</button>
+    <button id="restart" disabled>Restart</button>
+    <button id="open">Open cartridge</button>
+    <button id="dispose">Dispose</button>
+  </nav>
+  <input id="file" type="file" accept=".png,image/png" hidden />
+  <p id="status" role="status" aria-live="polite">Loading…</p>
+  <p>
+    Choose Play, then use arrows / WASD, Space, or tap and drag the game. Action uses the
+    cartridge's action binding.
+  </p>
+  <script type="module" src="./custom-player.js"></script>
+</html>

@@ -7,6 +7,7 @@ import { createServer } from "node:http";
 import { createHash, randomUUID } from "node:crypto";
 import { createProject, buildProject } from "./sdk/project.mjs";
 import { chromium } from "./browser-timing.mjs";
+import { minimumDelay } from "./test-clock.mjs";
 
 const root = resolve("build/ogg-startup-verification", randomUUID());
 const project = resolve(root, "fixture");
@@ -44,7 +45,7 @@ const server = createServer(async (request, response) => {
     const pathname = new URL(request.url, "http://localhost").pathname;
     const [, mode, ...parts] = pathname.split("/");
     assert(["red", "green"].includes(mode));
-    const name = parts.join("/") || "player.html";
+    const name = parts.join("/") || "debug.html";
     const path = resolve(web, name);
     assert(path.startsWith(web + sep));
     let bytes = await readFile(path);
@@ -56,7 +57,7 @@ const server = createServer(async (request, response) => {
     if (name === "vorbis.wasm") {
       const transfer = { mode, requested: Date.now(), delivered: null, bytes: bytes.length };
       transfers.push(transfer);
-      await new Promise((accept) => setTimeout(accept, 350));
+      transfer.durationMs = await minimumDelay(350);
       transfer.delivered = Date.now();
     }
     const types = { ".html": "text/html", ".js": "text/javascript", ".wasm": "application/wasm" };
@@ -122,7 +123,7 @@ try {
         }
       };
     });
-    await page.goto(`http://127.0.0.1:${server.address().port}/${mode}/player.html`);
+    await page.goto(`http://127.0.0.1:${server.address().port}/${mode}/debug.html`);
     await page.waitForFunction(() => playerStatus.ready || playerStatus.error);
     const ready = await page.evaluate(() => ({
       ...startupObservation.ready,
@@ -157,7 +158,7 @@ try {
     assert.equal(result.mixer.rejectedWrites, 0);
     const transfer = transfers.filter((entry) => entry.mode === mode);
     assert.equal(transfer.length, 1, "Exactly one actual decoder download");
-    assert(transfer[0].delivered - transfer[0].requested >= 350);
+    assert(transfer[0].durationMs >= 350, "The real decoder response is delayed at least 350 ms");
     if (mode === "red") {
       assert(transfer[0].requested >= started, "RED decoder stays lazy until playback");
       assert(result.mixer.underrunFrames > 0, "The omitted warmup must reproduce a real underrun");

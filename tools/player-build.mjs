@@ -1,7 +1,7 @@
 import { copyFile, mkdir } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { MAX_CARTRIDGE_BYTES, resourceSchema as limits } from "../runtime/odin/web/constants.js";
-import { dependencyRoot, repo, run, tool } from "./toolchain.mjs";
+import { dependencyRoot, nativeLinkerFlags, nativePlayer, repo, run, tool } from "./toolchain.mjs";
 
 const artifact = process.argv[2];
 const web = resolve(repo, "build/odin-player/web");
@@ -54,13 +54,10 @@ switch (artifact) {
     );
     break;
   case "native":
-    if (process.platform !== "win32") {
-      throw new Error("The native adapter currently targets Windows x64");
-    }
     await build(
       "runtime/odin/native",
-      [...common, `-collection:deps=${dependencyRoot()}`],
-      resolve(native, "player.exe"),
+      [...common, `-collection:deps=${dependencyRoot()}`, ...nativeLinkerFlags()],
+      resolve(native, nativePlayer),
     );
     break;
   case "hello":

@@ -6,7 +6,7 @@ import { randomUUID } from "node:crypto";
 import { chromium } from "../../../tools/browser-timing.mjs";
 import { buildKart3d, root } from "./build.mjs";
 import { course, LAP_UNITS } from "./course.mjs";
-import { run } from "../../../tools/toolchain.mjs";
+import { run, nativePlayer } from "../../../tools/toolchain.mjs";
 import { odinUnitTests } from "../../../tools/odin-unit-tests.mjs";
 import { serve } from "../../../tools/serve.mjs";
 import * as policy from "../../../runtime/odin/web/policy.js";
@@ -400,7 +400,7 @@ try {
     await page.goto(`http://127.0.0.1:${server.address().port}${base}/player.html`);
     const backend = gpu ? "gpu" : "cpu";
     const native = run(
-      resolve(project, "build/native/player.exe"),
+      resolve(project, `build/native/${nativePlayer}`),
       ["--replay", input, "--renderer", backend, ...(gpu ? ["--gpu-meshes"] : [])],
       { env: { ...process.env, ...(!gpu ? { SDL_VIDEODRIVER: "dummy" } : {}) } },
     )
@@ -517,7 +517,7 @@ try {
       for (const image of web.images) {
         const prefix = resolve(output, `${language}-${image.index}`);
         await writeFile(prefix + ".inputs", masks.slice(0, image.index + 1).join("\n") + "\n");
-        run(resolve(project, "build/native/player.exe"), [
+        run(resolve(project, `build/native/${nativePlayer}`), [
           "--replay",
           prefix + ".inputs",
           "--renderer",

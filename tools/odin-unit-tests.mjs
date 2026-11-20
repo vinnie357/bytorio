@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { timedSpawnSync } from "./command-timing.mjs";
-import { repo, tool } from "./toolchain.mjs";
+import { nativeLinkerFlags, repo, tool } from "./toolchain.mjs";
 import { sourceState } from "./validation-runner.mjs";
 
 // Share successful unit checks only inside the current validation invocation.
@@ -19,7 +19,7 @@ export function odinUnitTests(
     execute = timedSpawnSync,
   } = {},
 ) {
-  const flags = ["-o:none"];
+  const flags = ["-o:none", ...nativeLinkerFlags({ harness: true })];
   const key = createHash("sha256")
     .update(JSON.stringify({ compiler, cwd, suite, flags, fingerprint }))
     .digest("hex");

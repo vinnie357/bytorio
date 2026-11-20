@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { once } from "node:events";
 import { randomUUID } from "node:crypto";
 import { relative, resolve } from "node:path";
@@ -7,12 +7,14 @@ import { chromium } from "./browser-timing.mjs";
 import { buildBillboards } from "../examples/billboards/tools/build.mjs";
 import { buildEffects } from "../examples/effects/tools/build.mjs";
 import { bundleLuau } from "./sdk/bundle.mjs";
-import { run, tool } from "./toolchain.mjs";
+import { run, tool, copySdlLibrary, nativeLinkerFlags, nativePlayer } from "./toolchain.mjs";
 import { odinUnitTests } from "./odin-unit-tests.mjs";
 import { serve } from "./serve.mjs";
 import { negotiateProfile } from "../runtime/odin/web/policy.js";
 import { RESOURCE_EXPORTS } from "../runtime/odin/web/constants.js";
 import { browserEffectProbes } from "./effect-probes.mjs";
+import { requireNativePlayer } from "./sdk/project.mjs";
+requireNativePlayer();
 
 const gpu = process.argv.includes("--gpu");
 const effects = process.argv.includes("--effects");
@@ -91,8 +93,14 @@ if (effects) {
 }
 const projects = await (effects ? buildEffects() : buildBillboards());
 if (gpu) {
-  run(tool("odin"), ["build", "tests/gpu/native", "-o:none", `-out:${root}/device.exe`]);
-  await copyFile(resolve(projects[0].project, "build/native/SDL3.dll"), resolve(root, "SDL3.dll"));
+  run(tool("odin"), [
+    "build",
+    "tests/gpu/native",
+    "-o:none",
+    `-out:${root}/device.exe`,
+    ...nativeLinkerFlags({ harness: true }),
+  ]);
+  await copySdlLibrary(root);
   assert.equal(JSON.parse(run(resolve(root, "device.exe"), [])).pixel, 0xff0000ff);
 }
 const server = serve(".", 0);
@@ -113,7 +121,7 @@ try {
     : [{ backend: "cpu", ssaa: "off" }];
   for (const { language, project } of projects) {
     const base = "/" + relative(process.cwd(), resolve(project, "build/web")).replaceAll("\\", "/");
-    await page.goto(`http://127.0.0.1:${server.address().port}${base}/player.html`);
+    await page.goto(`http://127.0.0.1:${server.address().port}${base}/debug.html`);
     if (effects && gpu) {
       await page.evaluate(browserEffectProbes);
     }
@@ -128,7 +136,7 @@ try {
         const inputs = resolve(root, `${name}.inputs`);
         await writeFile(inputs, masks.join("\n") + "\n");
         const native = JSON.parse(
-          run(resolve(project, "build/native/player.exe"), [
+          run(resolve(project, "build/native", nativePlayer), [
             "--benchmark",
             inputs,
             "--renderer",
@@ -225,7 +233,7 @@ try {
               `${language}-${name}-${graphics.ssaa}-${Boolean(graphics.residentMeshes)}-${frame}`,
             );
             await writeFile(prefix + ".inputs", masks.slice(0, frame + 1).join("\n"));
-            run(resolve(project, "build/native/player.exe"), [
+            run(resolve(project, "build/native", nativePlayer), [
               "--replay",
               prefix + ".inputs",
               "--renderer",
@@ -291,7 +299,7 @@ try {
         }
       }
     }
-    await page.goto(`http://127.0.0.1:${server.address().port}${base}/player.html?game=./game.png`);
+    await page.goto(`http://127.0.0.1:${server.address().port}${base}/debug.html?game=./game.png`);
     await page.waitForFunction(() => window.playerStatus?.ready || window.playerStatus?.error);
     assert.equal(await page.evaluate(() => window.playerStatus.error), "");
     await page.screenshot({ path: resolve(root, `${language}.png`) });

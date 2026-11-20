@@ -49,7 +49,7 @@ No C++ native player is used by either option. Luau itself remains implemented i
 - The browser adapter follows the same loading sequence and accepts the same executable bytes as native.
 - Both players expose development benchmark paths. Native unmetered execution is available only with `--benchmark`; normal execution retains interruption controls.
 
-The source upload functions are `game_source_buffer`, `game_source_capacity`, and `game_source_size`. The shared lifecycle remains `game_abi`, `game_frame_size`, `game_init`, `game_update`, and `game_draw`; display lists use `game_commands` and `game_command_count`. `game_error`/`game_error_length` and `game_heap_bytes`/`game_heap_peak` are executor-specific diagnostics.
+The source upload functions are `game_source_allocate(size)`, `game_source_capacity`, and `game_source_size`. Updated hosts allocate the exact source size, at most 8 MiB, before copying bytes. `game_source_buffer` remains a compatibility path that reserves the full source allowance; hosts fall back to it for older executors. The shared lifecycle remains `game_abi`, `game_frame_size`, `game_init`, `game_update`, and `game_draw`; display lists use `game_commands` and `game_command_count`. `game_error`/`game_error_length` and `game_heap_bytes`/`game_heap_peak` are executor-specific diagnostics.
 
 The executor is stored once with the player, not inside each cartridge. Native caches compiled code on disk; browser caches compiled modules for the player page's lifetime. There is no PNG package loader yet. The small executor-version manifest identifies player code, not cartridge packaging. The Luau console surface covers this RPG's clear, rectangle, atlas, sprite, text, buttons, and sound operations.
 
@@ -67,4 +67,4 @@ Guest linear-memory size is allocated Wasm addressable memory, not resident RAM 
 
 Normal native runs meter Wasm execution: ten million fuel per Odin guest call and 500 million for the Luau executor, to accommodate its compiler/interpreter. These are interruption allowances, not equal language CPU quotas. The additional native unmetered measurements isolate some metering overhead, using trusted fixed inputs. Browser runs have the external Worker watchdog instead of native fuel.
 
-Both guests have an 8 MiB linear-memory maximum. The executor starts with 2 MiB and caps its custom Luau VM heap at 4 MiB; compiler allocations also have to fit inside the overall module limit. Native and browser resource accounting still require product design before these become final console limits.
+Odin guests have an 8 MiB linear-memory maximum. The Luau executor starts with 4 MiB, grows to at most 64 MiB for its source/compiler/VM storage, and caps its custom Luau VM heap at 4 MiB. Its source allowance is 8 MiB, matching the Odin module-size allowance. Native fuel and browser watchdog budgets remain separate execution bounds.

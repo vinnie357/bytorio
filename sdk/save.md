@@ -51,11 +51,13 @@ The game may reuse its staging buffer immediately after `write` returns. The
 host rejects oversized input before copying and cannot expose arbitrary files.
 There is no filename argument, directory access, or placeholder success result.
 
-Declare a stable identity in `console.json` to retain saves across compatible
+Declare a stable identity in `bytorio.toml` to retain saves across compatible
 rebuilds, cover/assets/code changes and file renames in either SDK:
 
-```json
-"save": {"id": "org.example.game.compat-v1", "legacy": []}
+```toml
+[save]
+id = "org.example.game.compat-v1"
+legacy = []
 ```
 
 IDs contain 1–128 lowercase ASCII letters/digits, with single dot or hyphen

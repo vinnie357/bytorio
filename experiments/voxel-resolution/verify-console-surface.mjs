@@ -4,7 +4,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { chromium } from "playwright";
 import { serve } from "../../tools/serve.mjs";
-import { run } from "../../tools/toolchain.mjs";
+import { run, nativePlayer } from "../../tools/toolchain.mjs";
 import * as input from "../../runtime/odin/web/constants.js";
 
 const root = resolve("build/compact-3d/riverside");
@@ -19,7 +19,7 @@ try {
   for (const language of ["odin", "luau"]) {
     const base = `/build/compact-3d/riverside/${language}/build/web`;
     const page = await browser.newPage({ viewport: { width: 1920, height: 1400 } });
-    await page.goto(`${origin}${base}/player.html?renderer=gpu&surface-samples&smooth-pan`);
+    await page.goto(`${origin}${base}/debug.html?renderer=gpu&surface-samples&smooth-pan`);
     await page.waitForFunction(() => window.playerStatus?.ready || window.playerStatus?.error);
     assert.equal(await page.evaluate(() => window.playerStatus.error), "");
     assert(await page.locator("#graphics-surface").isChecked());
@@ -98,7 +98,7 @@ try {
         const capture = resolve(root, `${language}-surface-${ssaa}-${width}.rgba`);
         await writeFile(replay, masks.join("\n") + "\n");
         const native = run(
-          resolve(root, `${language}/build/native/player.exe`),
+          resolve(root, `${language}/build/native/${nativePlayer}`),
           [
             "--replay",
             replay,

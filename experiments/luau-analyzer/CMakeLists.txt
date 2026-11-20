@@ -1,0 +1,8 @@
+cmake_minimum_required(VERSION 3.24)
+project(bytorio_luau_analyzer LANGUAGES C CXX)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+set(LUAU_BUILD_CLI ON CACHE BOOL "" FORCE)
+set(LUAU_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(LUAU_BUILD_WEB OFF CACHE BOOL "" FORCE)
+include("${CMAKE_CURRENT_SOURCE_DIR}/../luau-dependency.cmake")

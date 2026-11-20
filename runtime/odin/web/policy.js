@@ -2,6 +2,8 @@ import {
   FRAME_BYTES,
   MAX_GAME_BYTES,
   MAX_MEMORY_BYTES,
+  MAX_LUAU_MEMORY_BYTES,
+  MAX_LUAU_SOURCE_BYTES,
   WASM_PAGE_BYTES,
   resourceSchema,
   PROFILE_RESOURCE,
@@ -228,7 +230,8 @@ export function submitResources(game, runtime) {
   checkExecutor(game);
 }
 
-export function inspectGuest(bytes, compiledModule) {
+export function inspectGuest(bytes, compiledModule, { luauExecutor = false } = {}) {
+  const memoryLimit = luauExecutor ? MAX_LUAU_MEMORY_BYTES : MAX_MEMORY_BYTES;
   const data = new Uint8Array(bytes);
   if (data.length > MAX_GAME_BYTES) {
     throw new Error("Game module exceeds prototype size limit.");
@@ -343,8 +346,10 @@ export function inspectGuest(bytes, compiledModule) {
       const flags = leb(end),
         initial = leb(end),
         maximum = flags === 1 ? leb(end) : Infinity;
-      if (flags !== 1 || initial > maximum || maximum > MAX_PAGES) {
-        throw new Error("Game memory must declare an 8 MiB maximum or less.");
+      if (flags !== 1 || initial > maximum || maximum > memoryLimit / WASM_PAGE_BYTES) {
+        throw new Error(
+          `Game memory must declare a ${memoryLimit / (1024 * 1024)} MiB maximum or less.`,
+        );
       }
       if (cursor !== end) {
         throw new Error("Invalid memory declaration.");
@@ -443,15 +448,20 @@ export function loadSource(game, source) {
   const bytes = new Uint8Array(source);
   if (
     !bytes.length ||
-    bytes.length > 256 * 1024 ||
+    bytes.length > MAX_LUAU_SOURCE_BYTES ||
     typeof game.game_source_buffer !== "function" ||
     typeof game.game_source_capacity !== "function" ||
     typeof game.game_source_size !== "function"
   ) {
     throw new Error("Invalid source or executor.");
   }
-  const offset = game.game_source_buffer(),
+  const allocate = typeof game.game_source_allocate === "function";
+  const offset = allocate ? game.game_source_allocate(bytes.length) : game.game_source_buffer(),
     capacity = game.game_source_capacity();
+  if (allocate && !offset) {
+    checkExecutor(game);
+    throw new Error("Cannot allocate source buffer.");
+  }
   if (
     bytes.length > capacity ||
     !Number.isInteger(offset) ||

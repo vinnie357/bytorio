@@ -57,18 +57,18 @@ run = "node tools/format-code.mjs cpp"
 description = "Build standalone native/browser players and fixtures"
 # Finish the shared decoder before entering a nested player graph. Trace tasks
 # can otherwise start the same decoder concurrently in the outer graph.
-depends = ["deps:vorbis"]
+depends = ["deps:vorbis", "deps:vorbis:native", "deps:sdl3:native"]
 # Skip the nested graph on unchanged builds; tests verify this aggregate contract.
 outputs = [
-  "build/odin-player/native/SDL3.dll",
+  "build/odin-player/native/{% if os() == 'windows' %}SDL3.dll{% else %}libSDL3.0.dylib{% endif %}",
   "build/odin-player/native/game.wasm",
   "build/odin-player/native/licenses/glad.txt",
   "build/odin-player/native/licenses/odin.txt",
   "build/odin-player/native/licenses/opengl.txt",
   "build/odin-player/native/licenses/sdl3.txt",
   "build/odin-player/native/licenses/wasmtime.txt",
-  "build/odin-player/native/player.exe",
-  "build/odin-player/native/wasmtime.dll",
+  "build/odin-player/native/{% if os() == 'windows' %}player.exe{% else %}player{% endif %}",
+  "build/odin-player/native/{% if os() == 'windows' %}wasmtime.dll{% else %}licenses/wasmtime.txt{% endif %}",
   "build/odin-player/web/audio-worklet.js",
   "build/odin-player/web/audio.wasm",
   "build/odin-player/web/ogg.js",
@@ -109,7 +109,17 @@ outputs = [
   "build/odin-player/web/gpu.js",
   "build/odin-player/web/licenses/odin.txt",
   "build/odin-player/web/player.html",
-  "build/odin-player/web/player.js",
+  "build/odin-player/web/custom-player.html",
+  "build/odin-player/web/custom-player.js",
+  "build/odin-player/web/debug-player.js",
+  "build/odin-player/web/debug.html",
+  "build/odin-player/web/bootstrap.js",
+  "build/odin-player/web/runtime.js",
+  "build/odin-player/web/session.js",
+  "build/odin-player/web/input.js",
+  "build/odin-player/web/web-player.js",
+  "build/odin-player/web/player-input.js",
+  "build/odin-player/web/player-config.js",
   "build/odin-player/web/policy.js",
   "build/odin-player/web/runtime-gpu.wasm",
   "build/odin-player/web/runtime.wasm",
@@ -120,6 +130,7 @@ sources = [
   ".mise/tasks/vorbis.toml",
   "runtime/vorbis/**",
   "tools/vorbis-build.mjs",
+  "tools/sdl3-build.mjs",
   ".mise/tasks/player.toml",
   ".mise/toolchain.toml",
   "examples/hello/odin/**/*.odin",
@@ -141,6 +152,7 @@ sources = [
   "runtime/odin/timing/**/*.odin",
   "runtime/odin/web/**/*.odin",
   "runtime/odin/web/*.html",
+  "sdk/examples/custom-player/**",
   "runtime/odin/web/*.js",
   "runtime/odin/web/constants.js",
   "tests/odin/fixtures/**/*.odin",
@@ -149,6 +161,7 @@ sources = [
   "tools/player-export.mjs",
   "tools/stage-player.mjs",
   "tools/toolchain.mjs",
+  "tools/host-platform.mjs",
 ]
 
 [tasks."test:sdk"]
@@ -242,7 +255,7 @@ run = "node tools/verify-audio-admission.mjs"
 [tasks."test:ogg-startup"]
 depends = ["build:odin"]
 description = "Verify decoder code warmup before delayed real browser Ogg playback"
-run = "node tools/verify-ogg-startup.mjs"
+run = ["node --test tools/test-clock.test.mjs", "node tools/verify-ogg-startup.mjs"]
 
 [tasks."test:display"]
 depends = ["//examples/rpg:build"]
@@ -254,7 +267,12 @@ run = [
   {task = "test:validation"},
   {task = "test:build-tasks"},
   {task = "test:player-export"},
+  {task = "test:web-runtime"},
+  {task = "test:web-player"},
+  {task = "test:native-platform"},
     {task = "test:cli"},
+  {task = "test:cli-worker"},
+  {task = "test:sdk-authoring"},
   {task = "test:sdk"},
   {task = "test:save"},
   {task = "test:text-input"},
@@ -289,11 +307,26 @@ run = "node tools/validate.mjs"
 
 [tasks."test:validation"]
 description = "Test validation failure reporting, deadlines and source tracking"
-run = "node --test tools/validation-runner.test.mjs tools/frame-clock.test.mjs tools/odin-unit-tests.test.mjs tools/browser-timing.test.mjs"
+run = "node --test tools/validation-runner.test.mjs tools/frame-clock.test.mjs tools/odin-unit-tests.test.mjs tools/browser-timing.test.mjs tools/host-platform.test.mjs tools/srgb.test.mjs"
+
+[tasks."test:native-platform"]
+description = "Verify native filesystem behavior and relocated player dependencies"
+depends = ["build:odin"]
+run = ["node --test tools/macos-loader.test.mjs", "node tools/verify-native-platform.mjs"]
 
 [tasks."test:player-export"]
 description = "Verify complete player exports and missing-dependency failures"
 run = "node --test tools/player-export.test.mjs"
+
+[tasks."test:web-runtime"]
+description = "Verify the public embeddable runtime with independent browser sessions"
+depends = ["build:odin", "deps:luau"]
+run = "node tools/verify-web-runtime.mjs"
+
+[tasks."test:web-player"]
+description = "Verify production mounts, touch layouts and input ownership"
+depends = ["build:odin", "deps:luau"]
+run = ["node --test tools/player-input.test.mjs", "node tools/verify-web-player.mjs"]
 
 [tasks."test:drawing"]
 run = "node experiments/luau-executor/verify-drawing.mjs"
@@ -366,3 +399,11 @@ run = "node tools/capture-site.mjs"
 [tasks."test:site"]
 description = "Check website links, search, responsive layout and playable touch controls"
 run = ["node tools/build-site.mjs --staged", "node tools/verify-site.mjs"]
+
+[tasks."test:cli-install"]
+description = "Install a published CLI with mise and verify locks and offline SDK use (network required)"
+run = "node tools/verify-cli-install.mjs"
+
+[tasks."test:cli-archive-install"]
+description = "Verify archive installation with an older mise release (network required)"
+run = "node tools/verify-cli-archive-install.mjs"

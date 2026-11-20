@@ -3,16 +3,21 @@
 Design rationale: [immutable content separate from guest memory](adr/0007-separate-cartridge-content-from-guest-memory.md).
 
 Cartridges may package immutable byte blobs outside their executable module.
-The guest keeps its existing 1 MiB Wasm module and 8 MiB memory limits; the Luau
-source and heap limits, display modes and profile tuples are unchanged.
+Code has an 8 MiB limit for either a Wasm module or bundled Luau source. Odin
+guest memory is capped at 8 MiB. Luau has a separate 64 MiB executor-memory
+ceiling for its source and compiler, with a 4 MiB VM heap cap. Indexed content
+does not increase these budgets, display modes or profile tuples.
 
-Declare portable project-relative files in `console.json`:
+Declare portable project-relative files in `bytorio.toml`:
 
-```json
-"content": [
-  { "id": 1, "path": "assets/atlas.rgba" },
-  { "id": 2, "path": "assets/music.pcm" }
-]
+```toml
+[[content]]
+id = 1
+path = "assets/atlas.rgba"
+
+[[content]]
+id = 2
+path = "assets/music.pcm"
 ```
 
 The normal SDK check, build and pack commands include these entries. Direct
@@ -44,7 +49,7 @@ regions covering it exactly. Duplicate chunks, overlaps, gaps, unsorted IDs,
 overflow, unsupported versions and trailing unindexed bytes are rejected before
 publication. PNG CRC validation covers the complete chunk. Index and blobs
 together are capped at 512 MiB and 65,536 entries. The cover and code retain their
-separate 2 MiB PNG budget. These limits live in `sdk/contract.json`.
+separate 10 MiB PNG budget. These limits live in `sdk/contract.json`.
 
 The host imports `env.content_size(i32)->i32` and
 `env.content_read(i32,i32,i32,i32)->i32` supply access. The read arguments are ID,

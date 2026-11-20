@@ -4,7 +4,7 @@ import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { relative, resolve } from "node:path";
 import { chromium } from "./browser-timing.mjs";
-import { createProject, buildProject } from "./sdk/project.mjs";
+import { createProject, buildProject, requireNativePlayer } from "./sdk/project.mjs";
 import {
   configureResources,
   submitResources,
@@ -20,10 +20,11 @@ import {
   FNV1A_PRIME,
   RESOURCE_EXPORTS,
 } from "../runtime/odin/web/constants.js";
-import { run, task, dependencyRoot } from "./toolchain.mjs";
+import { run, task, copyWasmtimeLibrary, nativePlayer } from "./toolchain.mjs";
 import { odinUnitTests } from "./odin-unit-tests.mjs";
 import { serve } from "./serve.mjs";
 import { buildTexturedDrawing } from "./build-textured-3d.mjs";
+requireNativePlayer();
 
 const root = resolve("build/textured-3d-verification", randomUUID());
 const profile = JSON.parse(await readFile("sdk/profiles/textured-3d-preview-1.json"));
@@ -50,7 +51,7 @@ await writeFile(
 odinUnitTests("tests/3d", resolve(root, "unit.exe"));
 task("deps:trace:resources");
 await copyFile("build/validation-tools/resources/trace.exe", resolve(root, "trace.exe"));
-await copyFile(resolve(dependencyRoot(), "wasmtime.dll"), resolve(root, "wasmtime.dll"));
+await copyWasmtimeLibrary(root);
 
 const advertised = {
   ...Object.fromEntries(RESOURCE_EXPORTS.map(({ name }) => [name, () => 0])),
@@ -240,7 +241,7 @@ for (const language of ["odin", "luau"]) {
     .split(/\r?\n/)
     .map((row) => row.split(" ").map(Number));
   assert.deepEqual(native, trace, `${language}: native registry trace`);
-  const standalone = JSON.parse(run(resolve(project, "build/native/player.exe"), ["--check"]));
+  const standalone = JSON.parse(run(resolve(project, "build/native", nativePlayer), ["--check"]));
   assert.equal(standalone.resourceHash, trace[120][0]);
   assert.equal(standalone.resourceBytes, 132);
   if (reference) {
@@ -377,12 +378,12 @@ try {
     );
     assert.equal(pixels.getUint32(0, true), 0xff222222, `${language}: background`);
     const expected = runtime.runtime_hash() >>> 0;
-    const native = JSON.parse(run(resolve(project, "build/native/player.exe"), ["--check"]));
+    const native = JSON.parse(run(resolve(project, "build/native", nativePlayer), ["--check"]));
     assert.equal(native.hash, expected, `${language}: standalone textured pixels`);
     const base = "/" + relative(process.cwd(), web).replaceAll("\\", "/");
     for (const gameFile of ["game.png", language === "luau" ? "game.luau" : "game.wasm"]) {
       await page.goto(
-        `http://127.0.0.1:${server.address().port}${base}/player.html?game=./${gameFile}&smoke`,
+        `http://127.0.0.1:${server.address().port}${base}/debug.html?game=./${gameFile}&smoke`,
       );
       await page.waitForFunction(() => window.playerStatus?.ready || window.playerStatus?.error);
       assert.equal(await page.evaluate(() => window.playerStatus.error), "");

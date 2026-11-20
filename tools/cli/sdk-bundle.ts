@@ -1,10 +1,10 @@
 import { createHash, randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { link, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
 import { gunzipSync } from "node:zlib";
 
-const repository = "https://github.com/ctxshift/free-machine/releases/download";
+const repository = "https://github.com/ctxshift/bytorio/releases/download";
 const maxDownload = 16 * 1024 * 1024;
 const maxExpanded = 64 * 1024 * 1024;
 
@@ -110,6 +110,13 @@ async function download(url: string, limit: number): Promise<Buffer> {
   return Buffer.concat(chunks);
 }
 
+async function readCachedSdk(cacheFile: string, version: string) {
+  const entry = JSON.parse(await readFile(cacheFile, "utf8"));
+  const manifest = parseManifest(Buffer.from(JSON.stringify(entry.manifest)), version);
+  const bundle = parseBundle(Buffer.from(entry.archive, "base64"), manifest);
+  return { bundle, manifest };
+}
+
 export async function resolveSdk(
   version: string,
   options: {
@@ -127,10 +134,7 @@ export async function resolveSdk(
   const root = options.releaseRoot ?? repository;
   const cacheFile = resolve(cache, "entry.json");
   try {
-    const entry = JSON.parse(await readFile(cacheFile, "utf8"));
-    const manifest = parseManifest(Buffer.from(JSON.stringify(entry.manifest)), version);
-    const bundle = parseBundle(Buffer.from(entry.archive, "base64"), manifest);
-    return { bundle, manifest };
+    return await readCachedSdk(cacheFile, version);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
       throw new Error(`Cached SDK ${version} is invalid; remove ${cacheFile} and retry`, {
@@ -139,7 +143,10 @@ export async function resolveSdk(
     }
   }
   if (options.offline)
-    throw new Error(`SDK ${version} is not cached; run byt sdk install ${version} online first`);
+    throw Object.assign(
+      new Error(`SDK ${version} is not cached; run byt sdk install ${version} online first`),
+      { code: "SDK_LEGACY_MISSING" },
+    );
   const base = `${root}/sdk-v${version}`;
   const manifest = parseManifest(await download(`${base}/sdk-release.json`, 65536), version);
   console.log(`Downloading SDK ${version} (${manifest.bytes} bytes)`);
@@ -151,7 +158,18 @@ export async function resolveSdk(
     await writeFile(staging, JSON.stringify({ manifest, archive: bytes.toString("base64") }), {
       flag: "wx",
     });
-    await rename(staging, cacheFile);
+    // Publish a complete entry without replacing a concurrent installer's file.
+    // Hard links make this atomic on both NTFS and the supported Mac filesystems.
+    try {
+      await link(staging, cacheFile);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+      const winner = await readCachedSdk(cacheFile, version);
+      if (winner.manifest.sha256 !== manifest.sha256) {
+        throw new Error(`SDK ${version} changed during concurrent installation`);
+      }
+      return winner;
+    }
   } finally {
     await rm(staging, { force: true });
   }

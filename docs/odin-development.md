@@ -1,6 +1,6 @@
 # Odin reproduction
 
-The Odin player reproduces the original sprite-and-sound example on Windows native and web. Both hosts load **identical game.wasm bytes** compiled from [the game source](../examples/hello/odin/main.odin). Rendering, sprite pixels, PCM generation, command validation, and framebuffer hashing live in [shared Odin runtime code](../runtime/odin/core/core.odin).
+The Odin player reproduces the original sprite-and-sound example on Windows and macOS native hosts and in the browser. Both hosts load **identical game.wasm bytes** compiled from [the game source](../examples/hello/odin/main.odin). Rendering, sprite pixels, PCM generation, command validation, and framebuffer hashing live in [shared Odin runtime code](../runtime/odin/core/core.odin).
 
 The native player is an Odin executable using SDL3 and Wasmtime's C API. It has no maintained C++ core and needs no webview, Node.js, or compiler to play. The browser loads the Odin game and Odin runtime as separate Wasm instances in a Worker. JavaScript handles browser input, scheduling, pixel presentation, audio output, and Worker lifecycle.
 
@@ -21,10 +21,19 @@ Mise installs Odin `dev-2026-10` revision `84bc3fc` and Wasmtime C API **49.0.3*
 
 `mise run deps:player:native` and `mise run deps:player:web` build one host.
 Playable games own their [nested project tasks](../examples/README.md), such as
-`mise run //examples/rpg:build`. Native currently targets Windows x64. Other
-native hosts remain unvalidated.
+`mise run //examples/rpg:build`. Native targets Windows x64 and macOS arm64.
+On macOS, install Xcode Command Line Tools, run the same mise setup/build commands,
+and launch `./build/odin-player/native/player`.
+The pinned Odin release has no Intel Mac compiler; Intel Mac CI covers the
+standalone scaffolding CLI only.
 
 The native player finds `game.wasm` beside its executable, independent of the working directory. Distribute `player.exe`, `game.wasm`, `SDL3.dll`, `wasmtime.dll`, and `licenses/` together. An import-table inspection found only those bundled libraries and Windows system dependencies; a clean-machine packaging test remains outstanding.
+
+On macOS, distribute `player`, `game.wasm`, `libSDL3.0.dylib` and `licenses/`.
+Wasmtime and Vorbis are linked statically. Exports use relative loader paths and
+ad hoc code signatures; distribution signing and notarization are not provided.
+Default saves use `~/Library/Application Support/Bytorio/saves` on macOS and
+`LOCALAPPDATA/Bytorio/saves` on Windows; `BYTORIO_SAVE_DIRECTORY` overrides either.
 
 Use arrows/WASD or a controller D-pad to move; Space, the controller's south button, or click/tap triggers the sound. Pointer input positions the sprite. Physical controller and touch hardware have not been tested yet. Focus loss pauses updates; native focus regain resumes them.
 

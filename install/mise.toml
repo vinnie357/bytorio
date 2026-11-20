@@ -1,0 +1,10 @@
+[tools."github:ctxshift/bytorio"]
+version = "latest"
+version_prefix = "byt-v"
+prerelease = true
+# Include newly published previews; this applies only to this tool.
+minimum_release_age = "0d"
+
+[tasks."sdk:install"]
+description = "Cache an exact SDK bundle version: mise run sdk:install -- <version>"
+run = "byt sdk install"

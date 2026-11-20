@@ -4,8 +4,8 @@ export const SAVE_IDENTITY_CHUNK = "saVe";
 export const PRODUCT_NAME = "Bytorio";
 export const WEBSITE = "https://bytor.io";
 export const PLAYER_TITLE = "Bytorio player";
-export const MAX_CARTRIDGE_BASE_BYTES = 2097152;
-export const MAX_CARTRIDGE_BYTES = 538968076;
+export const MAX_CARTRIDGE_BASE_BYTES = 10485760;
+export const MAX_CARTRIDGE_BYTES = 547356684;
 export const CONTENT_VERSION = 1;
 export const CONTENT_MAGIC = 1414419523;
 export const CONTENT_HEADER_MAGIC = 0;
@@ -45,12 +45,13 @@ export const RESOURCE_SDK_VERSION = 512;
 export const RESOURCE_FEATURES = 7;
 export const RESOURCE_PROTOCOL = 4;
 export const FRAME_BYTES = 40;
-export const MAX_GAME_BYTES = 1048576;
+export const MAX_GAME_BYTES = 8388608;
 export const MAX_MEMORY_BYTES = 8388608;
 export const MAX_COMMANDS = 16384;
 export const MAX_TEXT_BYTES = 16384;
 export const MAX_GRAPHICS_BYTES = 66512;
-export const MAX_LUAU_SOURCE_BYTES = 262144;
+export const MAX_LUAU_SOURCE_BYTES = 8388608;
+export const MAX_LUAU_MEMORY_BYTES = 67108864;
 export const MAX_LUAU_HEAP_BYTES = 4194304;
 export const U32_MAX = 4294967295;
 export const U32_MODULUS = 4294967296;
@@ -103,6 +104,11 @@ export const SAVE_READY = 1;
 export const SAVE_PENDING = 2;
 export const SAVE_ERROR = 3;
 export const INPUT_BUTTON_MASK = 4294967295;
+export const BUTTON_LEFT = 1;
+export const BUTTON_RIGHT = 2;
+export const BUTTON_UP = 4;
+export const BUTTON_DOWN = 8;
+export const BUTTON_ACTION = 16;
 export const BUTTON_MOVE_LEFT = 32;
 export const BUTTON_MOVE_RIGHT = 64;
 export const BUTTON_MOVE_UP = 128;
@@ -248,6 +254,8 @@ export const resourceSchema = Object.freeze({
   maxAudioEvents: 4096,
   maxAudioBatches: 8,
   audioLeadFrames: 2400,
+  audioPacketHeaderBytes: 24,
+  audioPacketSimulationFrameOffset: 16,
   audioHorizonFrames: 96000,
   maxAudioSnapshotBytes: 8388608,
   audioPageFrames: 256,
@@ -385,8 +393,7 @@ export const resourceSchema = Object.freeze({
   mailboxCapacity: 1049168,
   maxAudioLeases: 5464,
   maxAudioDoneRecords: 9576,
-  audioPacketHeaderBytes: 16,
   audioEventBytes: 96,
-  maxAudioPacketBytes: 8781840,
+  maxAudioPacketBytes: 8781848,
   maxAudioFeedbackBytes: 306512,
 });

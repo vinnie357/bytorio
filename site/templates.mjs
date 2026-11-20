@@ -58,7 +58,7 @@ export function home() {
 byt new my-game
 
 <span># Preview creates projects; source CLI runs games</span>
-byt --help</pre><p><a href="docs/docs/getting-started.html">Download the Windows preview</a> · Build/run require source setup</p></div></section></main>`,
+byt --help</pre><p><a href="docs/docs/getting-started.html#download-the-cli-preview">Download the Windows or Mac preview</a> · Build/run require source setup</p></div></section></main>`,
   });
 }
 

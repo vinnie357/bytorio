@@ -5,9 +5,9 @@ import { randomUUID } from "node:crypto";
 import { timedSpawnSync as spawnSync } from "./command-timing.mjs";
 import { once } from "node:events";
 import { chromium } from "./browser-timing.mjs";
-import { createProject, buildProject } from "./sdk/project.mjs";
+import { createProject, buildProject, requireNativePlayer } from "./sdk/project.mjs";
 import { serve } from "./serve.mjs";
-import { tool, dependencyRoot, task } from "./toolchain.mjs";
+import { tool, task, copyWasmtimeLibrary, nativePlayer } from "./toolchain.mjs";
 import {
   configureResources,
   submitResources,
@@ -18,6 +18,7 @@ import {
   rasterizeDrawing,
   checkExecutor,
 } from "../runtime/odin/web/policy.js";
+requireNativePlayer();
 
 const root = resolve("build/graphics-verification", randomUUID());
 await mkdir(root, { recursive: true });
@@ -31,11 +32,10 @@ function run(exe, args, expected = 0) {
   return result;
 }
 const odin = tool("odin");
-const deps = dependencyRoot();
 run(odin, ["test", "tests/graphics", "-o:none", `-out:${resolve(root, "renderer-tests.exe")}`]);
 task("deps:trace:graphics");
 await copyFile("build/validation-tools/graphics/trace.exe", resolve(root, "trace.exe"));
-await copyFile(resolve(deps, "wasmtime.dll"), resolve(root, "wasmtime.dll"));
+await copyWasmtimeLibrary(root);
 const projects = {},
   references = {},
   benchmarks = {};
@@ -130,7 +130,7 @@ for (const language of ["odin", "luau"]) {
       `${language} native bytes ${frame.tick}`,
     );
   }
-  const player = run(resolve(project, "build/native/player.exe"), [
+  const player = run(resolve(project, "build/native", nativePlayer), [
     "--game",
     wasm,
     ...(source ? ["--source", source] : []),

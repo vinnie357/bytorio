@@ -1,124 +1,12 @@
 :root {
-  color-scheme: dark;
-  font-family: system-ui, sans-serif;
+  background: #11151d;
 }
 body {
   min-height: 0;
   display: block;
-  background: #11151d;
-  color: #f5f0ed;
+  padding: 10px;
 }
-main {
-  padding: 14px;
-}
-main > label,
-main > fieldset,
-#performance {
-  display: none;
-}
-#screen {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-#canvas {
-  max-width: 100%;
-  width: 100% !important;
-  height: auto !important;
-  aspect-ratio: 16 / 9;
-}
-button {
-  font-size: 13px;
-  background: #be292e;
-  color: #fff5ee;
-  margin: 6px 3px;
-  padding: 12px 18px;
-  border-radius: 0;
-  border: 2px solid #ed6c68;
-  box-shadow: 3px 3px #080712;
-}
-#status {
-  font-size: 11px;
-  margin: 10px auto 0;
-  color: #c5c5cc;
-}
-.touch-controls {
-  display: flex;
-  width: 100%;
-  max-width: 430px;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 0;
-  gap: 20px;
-}
-.touch-dpad {
-  display: grid;
-  grid-template-columns: repeat(3, 48px);
-  grid-template-rows: repeat(2, 48px);
-  gap: 5px;
-}
-.touch-key {
-  touch-action: none;
-  user-select: none;
-  -webkit-user-select: none;
-  -webkit-touch-callout: none;
-  margin: 0;
-  padding: 0;
-  min-width: 48px;
-  min-height: 48px;
-  border: 2px solid #666671;
-  background: #252832;
-  color: #f5f0ed;
-  font-size: 21px;
-}
-.touch-key.up {
-  grid-area: 1 / 2;
-}
-.touch-key.left {
-  grid-area: 2 / 1;
-}
-.touch-key.down {
-  grid-area: 2 / 2;
-}
-.touch-key.right {
-  grid-area: 2 / 3;
-}
-.touch-key.action {
-  background: #b82a2e;
-  border-color: #f0726a;
-  color: #fff5ee;
-  border-radius: 50%;
-  width: 95px;
-  height: 75px;
-  font-size: 12px;
-}
-.touch-key.pressed {
-  background: #be292e;
-  color: #11151d;
-}
-#screen:fullscreen {
-  display: flex;
-  justify-content: center;
-  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
-    env(safe-area-inset-left);
-}
-#screen:fullscreen #canvas {
-  width: auto !important;
-  max-height: calc(100dvh - 145px);
-  max-width: 100%;
-}
-@media (max-height: 500px) and (orientation: landscape) {
-  #screen:fullscreen {
-    flex-direction: row;
-    gap: 15px;
-  }
-  #screen:fullscreen #canvas {
-    max-width: calc(100% - 190px);
-    max-height: 100dvh;
-  }
-  #screen:fullscreen .touch-controls {
-    width: 165px;
-    flex-direction: column;
-    gap: 10px;
-  }
+[data-bytorio-player] {
+  --byt-accent: #ed8d82;
+  --byt-border: #555464;
 }

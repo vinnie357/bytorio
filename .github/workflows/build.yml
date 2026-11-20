@@ -3,7 +3,7 @@ name: Build and verify Bytorio
 on:
   push:
     branches:
-      - '**'
+      - "**"
   pull_request:
 
 permissions:
@@ -23,24 +23,46 @@ jobs:
       - run: npm run format:js:check
 
   sdk:
-    runs-on: windows-latest
-    defaults:
-      run:
-        shell: cmd
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-latest
+            platform: windows-x64
+            validation: --full
+            tools: ""
+          - runner: macos-15
+            platform: macos-arm64
+            validation: --full
+            tools: ""
+          - runner: macos-15-intel
+            platform: macos-x64
+            validation: test:cli
+            tools: node bun github:DanielGavin/ols stylua
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
     env:
       PLAYER_BROWSER_CHANNEL: chrome
+      MISE_TASK_RUN_AUTO_INSTALL: "false"
     steps:
       - uses: actions/checkout@v4
       - uses: jdx/mise-action@v4
         with:
           version: 2026.10.15
+          install_args: ${{ matrix.tools }}
       - run: npm ci
       - name: Run quality, conformance, drawing and cache gates
-        run: mise run validate
+        run: mise run validate ${{ matrix.validation }}
+      - name: Retain validation logs separately
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sdk-validation-${{ matrix.platform }}
+          path: build/validation/
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: sdk-verification
+          name: sdk-verification-${{ matrix.platform }}
           path: |
             build/validation/
             build/sdk-verification/
@@ -51,4 +73,6 @@ jobs:
             build/audio-verification/
             build/synthesis-verification/
             build/profile-verification/
+            build/cli-verification/report.json
+            build/sdk-authoring-verification/report.json
             build/odin-player/verification/

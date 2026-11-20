@@ -281,7 +281,8 @@ it retains raw phase timings and transfer/allocation counters under
 
 ## Profile and compatibility
 
-Opt in with SDK `0.3.0` and profile `compact-3d-preview-1` in `console.json`.
+Opt in with `profile = "compact-3d-preview-1"` in `bytorio.toml`. The pinned SDK
+must include that API profile (SDK/API `0.3.0`).
 The exact tuple is profile 3, ABI 2, SDK word 768, resource protocol 5 and feature
 mask 15. Bit 8 adds compact 3D to the three existing resource features. Native and
 browser loaders validate the complete tuple before game callbacks, including PNG
@@ -295,8 +296,9 @@ version, while `stableVersion` identifies the published version. Protocols below
 
 See the [experimental profile](../sdk/profiles/compact-3d-preview-1.json) and
 [wire schema](../sdk/resource-protocol.json). The preview retains the 64 MiB
-resource budget, 8 MiB guest memory, 4 MiB Luau heap and 1 MiB commit payload.
-The base PNG envelope for cover art and code has a separate 2 MiB budget.
+resource budget, 8 MiB Odin guest memory, 4 MiB Luau heap and 1 MiB commit payload.
+The Luau executor has a separate 64 MiB memory ceiling for source and compilation.
+The base PNG envelope for cover art and code has a separate 10 MiB budget.
 [Indexed content](indexed-content.md) can additionally package up to 512 MiB,
 including its index, without increasing guest memory or decoded-resource budgets.
 These storage allowances do not guarantee rendering speed or permit arbitrary

@@ -46,6 +46,14 @@ explicit maximum at or below 8 MiB. Module size is at most 1 MiB. Luau bundled
 source is at most 256 KiB; its tracked allocator limit is 4 MiB within guest memory.
 These are preview limits, independent of the planned 128/512 MB ROM sizes.
 
+These size limits describe the frozen legacy profile. Current players also
+accept modules up to 8 MiB and a 10 MiB base PNG envelope through the same
+container and guest ABI, and bundled Luau source up to 8 MiB. Odin guest memory
+remains capped at 8 MiB. The current Luau executor has its own 64 MiB memory
+ceiling for source and compilation, retaining its 4 MiB VM heap cap. Larger
+cartridges require an updated player; see
+[PNG cartridges](png-cartridges.md).
+
 SDK version words encode `major << 16 | minor << 8 | patch`; 0.1.0 is 256.
 Players require ABI 1. Older cartridges may omit SDK/display/batch extensions and
 use the existing 20-byte rectangle format. SDK 0.1.0 cartridges always provide

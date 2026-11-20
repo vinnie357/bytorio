@@ -1,8 +1,6 @@
-import { readFile } from "node:fs/promises";
+import metadata from "../package.json" with { type: "json" };
 
 // Package metadata owns the product identity. Runtime copies are generated.
-const metadata = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
-
 export const branding = Object.freeze({
   name: metadata.displayName,
   command: Object.keys(metadata.bin)[0],

@@ -31,6 +31,21 @@ test("native draws only on display opportunities; uncapped can draw between them
   assert.deepEqual(clock.take(-1, false), { steps: 0, render: true });
 });
 
+test("a slow worker preserves simulation ticks while skipping missed render opportunities", () => {
+  const clock = new FrameClock();
+  let ticks = 0;
+  let draws = 0;
+  for (let response = 0; response < 20; response++) {
+    clock.advance(1 / 20);
+    const plan = clock.take(30);
+    ticks += plan.steps;
+    draws += Number(plan.render);
+  }
+  assert.equal(ticks, 60);
+  assert.equal(draws, 20);
+  assert.deepEqual(clock.take(30), { steps: 0, render: false }, "No missed draws remain queued");
+});
+
 test("stalls drop excess tick debt and never queue missed draws", () => {
   const clock = new FrameClock();
   clock.advance(10);

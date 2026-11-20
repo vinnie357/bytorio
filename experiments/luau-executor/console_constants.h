@@ -3,8 +3,8 @@
 #include <cstdint>
 
 namespace console_constants {
-constexpr auto MAX_CARTRIDGE_BASE_BYTES = 2097152u;
-constexpr auto MAX_CARTRIDGE_BYTES = 538968076u;
+constexpr auto MAX_CARTRIDGE_BASE_BYTES = 10485760u;
+constexpr auto MAX_CARTRIDGE_BYTES = 547356684u;
 constexpr auto CONTENT_VERSION = 1u;
 constexpr auto CONTENT_MAGIC = 1414419523u;
 constexpr auto CONTENT_HEADER_MAGIC = 0u;
@@ -44,12 +44,13 @@ constexpr auto RESOURCE_SDK_VERSION = 512u;
 constexpr auto RESOURCE_FEATURES = 7u;
 constexpr auto RESOURCE_PROTOCOL = 4u;
 constexpr auto FRAME_BYTES = 40u;
-constexpr auto MAX_GAME_BYTES = 1048576u;
+constexpr auto MAX_GAME_BYTES = 8388608u;
 constexpr auto MAX_MEMORY_BYTES = 8388608u;
 constexpr auto MAX_COMMANDS = 16384u;
 constexpr auto MAX_TEXT_BYTES = 16384u;
 constexpr auto MAX_GRAPHICS_BYTES = 66512u;
-constexpr auto MAX_LUAU_SOURCE_BYTES = 262144u;
+constexpr auto MAX_LUAU_SOURCE_BYTES = 8388608u;
+constexpr auto MAX_LUAU_MEMORY_BYTES = 67108864u;
 constexpr auto MAX_LUAU_HEAP_BYTES = 4194304u;
 constexpr auto U32_MAX = 4294967295u;
 constexpr auto U32_MODULUS = 4294967296ull;
@@ -102,6 +103,11 @@ constexpr auto SAVE_READY = 1u;
 constexpr auto SAVE_PENDING = 2u;
 constexpr auto SAVE_ERROR = 3u;
 constexpr auto INPUT_BUTTON_MASK = 4294967295u;
+constexpr auto BUTTON_LEFT = 1u;
+constexpr auto BUTTON_RIGHT = 2u;
+constexpr auto BUTTON_UP = 4u;
+constexpr auto BUTTON_DOWN = 8u;
+constexpr auto BUTTON_ACTION = 16u;
 constexpr auto BUTTON_MOVE_LEFT = 32u;
 constexpr auto BUTTON_MOVE_RIGHT = 64u;
 constexpr auto BUTTON_MOVE_UP = 128u;

@@ -1,17 +1,23 @@
 import assert from "node:assert/strict";
 import { once } from "node:events";
-import { mkdir, copyFile, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { chromium } from "./browser-timing.mjs";
 import { serve } from "./serve.mjs";
-import { tool, run } from "./toolchain.mjs";
+import { tool, run, copySdlLibrary, nativeLinkerFlags, nativePlayer } from "./toolchain.mjs";
 import { odinUnitTests } from "./odin-unit-tests.mjs";
 
 const root = resolve("build/gpu-validation");
 await mkdir(root, { recursive: true });
 odinUnitTests("tests/3d", resolve(root, "resources.exe"));
-run(tool("odin"), ["build", "tests/gpu/native", "-o:none", `-out:${root}/device.exe`]);
-await copyFile("build/odin-player/native/SDL3.dll", resolve(root, "SDL3.dll"));
+run(tool("odin"), [
+  "build",
+  "tests/gpu/native",
+  "-o:none",
+  `-out:${root}/device.exe`,
+  ...nativeLinkerFlags({ harness: true }),
+]);
+await copySdlLibrary(root);
 const report = {
   status: "running",
   nativeFixture: JSON.parse(run(resolve(root, "device.exe"), [])),
@@ -29,7 +35,7 @@ try {
         const page = await browser.newPage();
         const base = `/build/compact-3d/${language}/build/web`;
         await page.goto(
-          `http://127.0.0.1:${server.address().port}${base}/player.html?renderer=gpu&ssaa=${ssaa}&pixel-snap&smoke${residentMeshes ? "&gpu-meshes" : ""}`,
+          `http://127.0.0.1:${server.address().port}${base}/debug.html?renderer=gpu&ssaa=${ssaa}&pixel-snap&smoke${residentMeshes ? "&gpu-meshes" : ""}`,
         );
         await page.waitForFunction(() => window.playerStatus?.ready || window.playerStatus?.error);
         await page.locator("#start").click();
@@ -40,7 +46,7 @@ try {
         assert.equal(status.error, "");
         assert.equal(status.graphics.effective, "gpu");
         const native = JSON.parse(
-          run(resolve(`build/compact-3d/${language}/build/native/player.exe`), [
+          run(resolve(`build/compact-3d/${language}/build/native/${nativePlayer}`), [
             "--check",
             "--renderer",
             "gpu",
@@ -65,7 +71,7 @@ try {
     const page = await browser.newPage({ viewport: { width: 1920, height: 1400 } });
     const base = `/build/compact-3d/${language}/build/web`;
     await page.goto(
-      `http://127.0.0.1:${server.address().port}${base}/player.html?renderer=gpu&ssaa=1080p&smooth-pan`,
+      `http://127.0.0.1:${server.address().port}${base}/debug.html?renderer=gpu&ssaa=1080p&smooth-pan`,
     );
     await page.waitForFunction(() => window.playerStatus?.ready || window.playerStatus?.error);
     assert.equal(await page.evaluate(() => window.playerStatus.error), "");
@@ -164,7 +170,7 @@ try {
     const inputs = resolve(root, "action.inputs");
     await writeFile(inputs, "16\n");
     const nativeHigh = JSON.parse(
-      run(resolve(`build/compact-3d/${language}/build/native/player.exe`), [
+      run(resolve(`build/compact-3d/${language}/build/native/${nativePlayer}`), [
         "--replay",
         inputs,
         "--renderer",
@@ -255,7 +261,7 @@ try {
       const inputs = resolve(root, "cpu-quality.inputs");
       await writeFile(inputs, "0\n16\n");
       const native = run(
-        resolve(`build/compact-3d/${language}/build/native/player.exe`),
+        resolve(`build/compact-3d/${language}/build/native/${nativePlayer}`),
         ["--replay", inputs, "--renderer", "cpu", "--ssaa", ssaa, "--smooth-pan"],
         { env: { ...process.env, SDL_VIDEODRIVER: "dummy" } },
       )
@@ -268,7 +274,7 @@ try {
     }
   }
   const page = await browser.newPage();
-  await page.goto(`http://127.0.0.1:${server.address().port}/build/odin-player/web/player.html`);
+  await page.goto(`http://127.0.0.1:${server.address().port}/build/odin-player/web/debug.html`);
   await page.waitForFunction(() => window.playerStatus?.ready);
   report.browserFixtures = await page.evaluate(async () => {
     const { createGpu, normalizeGraphics } = await import("./gpu.js");
@@ -567,7 +573,7 @@ OffscreenCanvas.prototype.getContext=function(kind,...args){return kind==="webgl
         (await response.text());
       await route.fulfill({ response, body });
     });
-    const base = `http://127.0.0.1:${server.address().port}/build/odin-player/web/player.html`;
+    const base = `http://127.0.0.1:${server.address().port}/build/odin-player/web/debug.html`;
     await fallbackPage.goto(base + "?renderer=auto");
     await fallbackPage.waitForFunction(
       () => window.playerStatus?.ready || window.playerStatus?.error,
@@ -582,7 +588,7 @@ OffscreenCanvas.prototype.getContext=function(kind,...args){return kind==="webgl
   } finally {
     await unavailable.close();
   }
-  const player = resolve("build/odin-player/native/player.exe");
+  const player = resolve("build/odin-player/native", nativePlayer);
   const automatic = JSON.parse(
     run(player, ["--check", "--renderer", "auto"], {
       env: { ...process.env, SDL_VIDEODRIVER: "dummy" },

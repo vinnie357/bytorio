@@ -6,7 +6,7 @@ import { cpus } from "node:os";
 import { resolve } from "node:path";
 import { chromium } from "playwright";
 import { serve } from "../../tools/serve.mjs";
-import { run } from "../../tools/toolchain.mjs";
+import { run, nativePlayer } from "../../tools/toolchain.mjs";
 
 const root = resolve("build/compact-3d/riverside");
 const measuredFrames = 30;
@@ -107,7 +107,7 @@ try {
   report.features = info.gpu.featureStatus;
   for (const language of ["odin", "luau"]) {
     const base = `/build/compact-3d/riverside/${language}/build/web`;
-    const executable = resolve(root, `${language}/build/native/player.exe`);
+    const executable = resolve(root, `${language}/build/native/${nativePlayer}`);
     report.binaries[language] = Object.fromEntries(
       await Promise.all(
         [

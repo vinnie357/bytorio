@@ -1,3 +1,4 @@
+import { nativePlayer } from "./toolchain.mjs";
 import assert from "node:assert/strict";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve, relative } from "node:path";
@@ -8,8 +9,11 @@ import { chromium } from "./browser-timing.mjs";
 import { build3dExamples } from "./build-3d.mjs";
 import { odinUnitTests } from "./odin-unit-tests.mjs";
 import { serve } from "./serve.mjs";
+import { bindPlayer } from "./browser-player.mjs";
 import { negotiateProfile } from "../runtime/odin/web/policy.js";
 import { resourceSchema } from "../runtime/odin/web/constants.js";
+import { requireNativePlayer } from "./sdk/project.mjs";
+requireNativePlayer();
 
 const profile = JSON.parse(await readFile("sdk/profiles/compact-3d-preview-1.json"));
 const baseProfile = JSON.parse(await readFile("sdk/profiles/resource-av-1.json"));
@@ -97,12 +101,12 @@ function summary(measured) {
 try {
   browser = await chromium.launch({ channel: process.env.PLAYER_BROWSER_CHANNEL || undefined });
   for (const { language, project } of projects) {
-    const executable = resolve(project, "build/native/player.exe");
+    const executable = resolve(project, "build/native", nativePlayer);
     const native = (args) => JSON.parse(run(executable, args));
     const base = "/" + relative(process.cwd(), resolve(project, "build/web")).replaceAll("\\", "/");
     const page = await browser.newPage({ viewport: { width: 960, height: 650 } });
     // Verify the packaged cartridge through the full interactive player as well.
-    await page.goto(`${origin}${base}/player.html?game=./game.png&smoke`);
+    await page.goto(`${origin}${base}/debug.html?game=./game.png&smoke`);
     await page.waitForFunction(() => window.playerStatus?.ready || window.playerStatus?.error);
     assert.equal(await page.evaluate(() => window.playerStatus.error), "");
     const cold = await page.evaluate(() => ({
@@ -137,7 +141,7 @@ try {
       assert.equal(warm.startup.executorCache.hit, true);
     }
     // Use the player's actual Worker protocol to retain transfer and validation costs.
-    await page.goto(`${origin}${base}/player.html`);
+    await page.goto(`${origin}${base}/debug.html`);
     const measured = await page.evaluate(
       async ({ base, language, cases, frames }) => {
         const worker = new Worker(base + "/worker.js", { type: "module" });
@@ -255,10 +259,13 @@ try {
     `${origin}/${relative(process.cwd(), root).replaceAll("\\", "/")}/player.html`,
   );
   for (const frame of comparison.frames().slice(1)) {
+    await bindPlayer(frame);
     await frame.waitForFunction(
-      () => globalThis.playerStatus?.ready || globalThis.playerStatus?.error,
+      () =>
+        window.hostedPlayer.runtime.getSnapshot().ready ||
+        window.hostedPlayer.runtime.getSnapshot().error,
     );
-    assert.equal(await frame.evaluate(() => globalThis.playerStatus.error), "");
+    assert.equal(await frame.evaluate(() => window.hostedPlayer.runtime.getSnapshot().error), "");
   }
   assert.equal(comparison.frames().length, 3);
   await comparison.screenshot({ path: resolve(root, "comparison.png"), fullPage: true });

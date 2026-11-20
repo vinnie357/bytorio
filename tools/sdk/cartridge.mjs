@@ -1,7 +1,6 @@
 import { MAX_GAME_BYTES, MAX_LUAU_SOURCE_BYTES } from "../../runtime/odin/web/constants.js";
 import { deflateSync } from "node:zlib";
-import { readFileSync } from "node:fs";
-const contract = JSON.parse(readFileSync(new URL("../../sdk/contract.json", import.meta.url)));
+import contract from "../../sdk/contract.json" with { type: "json" };
 
 export const PNG_LIMIT = contract.cartridge.maxPngBytes;
 export const CONTENT_LIMIT = contract.cartridge.content.maxBytes;
@@ -286,7 +285,7 @@ export function encodeCartridge({
     image.subarray(end),
   ]);
   if (png.length - (contentBytes ? contentBytes.length + 12 : 0) > PNG_LIMIT) {
-    throw new Error("PNG cartridge exceeds the 2 MiB preview limit");
+    throw new Error(`PNG cartridge exceeds base size limit (${PNG_LIMIT} bytes)`);
   }
   return png;
 }

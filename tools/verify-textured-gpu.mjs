@@ -1,19 +1,25 @@
 import assert from "node:assert/strict";
-import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { once } from "node:events";
 import { randomUUID } from "node:crypto";
 import { relative, resolve } from "node:path";
 import { chromium } from "./browser-timing.mjs";
 import { buildTexturedDrawing } from "./build-textured-3d.mjs";
-import { run, tool } from "./toolchain.mjs";
+import { run, tool, copySdlLibrary, nativeLinkerFlags, nativePlayer } from "./toolchain.mjs";
 import { serve } from "./serve.mjs";
 
 const root = resolve("build/textured-gpu-validation", randomUUID());
 const { buttons } = JSON.parse(await readFile("sdk/contract.json"));
 await mkdir(root, { recursive: true });
 const projects = await buildTexturedDrawing(resolve(root, "players"));
-run(tool("odin"), ["build", "tests/gpu/native", "-o:none", `-out:${root}/device.exe`]);
-await copyFile(resolve(projects[0].project, "build/native/SDL3.dll"), resolve(root, "SDL3.dll"));
+run(tool("odin"), [
+  "build",
+  "tests/gpu/native",
+  "-o:none",
+  `-out:${root}/device.exe`,
+  ...nativeLinkerFlags({ harness: true }),
+]);
+await copySdlLibrary(root);
 assert.equal(JSON.parse(run(resolve(root, "device.exe"), [])).pixel, 0xff0000ff);
 const server = serve(".", 0);
 await once(server, "listening");
@@ -36,7 +42,7 @@ try {
           const inputs = resolve(root, `${language}-${name}.inputs`);
           await writeFile(inputs, masks.join("\n") + "\n");
           const native = JSON.parse(
-            run(resolve(project, "build/native/player.exe"), [
+            run(resolve(project, "build/native", nativePlayer), [
               "--benchmark",
               inputs,
               "--renderer",

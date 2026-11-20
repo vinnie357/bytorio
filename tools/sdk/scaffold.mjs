@@ -1,5 +1,18 @@
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { readFile, writeFile, mkdir, lstat } from "node:fs/promises";
 import { resolve } from "node:path";
+
+async function ordinaryOutput(path, directory = false) {
+  try {
+    const info = await lstat(path);
+    if (directory ? !info.isDirectory() : !info.isFile()) {
+      throw new Error("Generated SDK/editor paths cannot be symbolic links or special files");
+    }
+  } catch (error) {
+    if (error.code !== "ENOENT") {
+      throw error;
+    }
+  }
+}
 
 /**
  * @param {{readAsset: (path: string) => Promise<string>, branding: {starterTitle: string, starterMessage: string}}} options
@@ -8,6 +21,7 @@ export async function createScaffolder({ readAsset, branding }) {
   const contract = JSON.parse(await readAsset("sdk/contract.json"));
   async function syncEditor(project) {
     const target = resolve(project, ".bytorio");
+    await ordinaryOutput(target, true);
     await mkdir(target, { recursive: true });
     for (const file of [
       "bytorio.luau",
@@ -22,9 +36,11 @@ export async function createScaffolder({ readAsset, branding }) {
       "save.luau",
       "text.luau",
     ]) {
+      await ordinaryOutput(resolve(target, file));
       await writeFile(resolve(target, file), await readAsset(`sdk/luau/${file}`));
     }
     const settingsPath = resolve(project, ".luaurc");
+    await ordinaryOutput(settingsPath);
     let settings = { languageMode: "strict" };
     try {
       settings = JSON.parse(await readFile(settingsPath, "utf8"));
@@ -40,6 +56,7 @@ export async function createScaffolder({ readAsset, branding }) {
     }
     await writeFile(settingsPath, JSON.stringify(settings, null, 2) + "\n");
     const ignorePath = resolve(project, ".gitignore");
+    await ordinaryOutput(ignorePath);
     let ignore = "";
     try {
       ignore = await readFile(ignorePath, "utf8");

@@ -33,7 +33,7 @@ const configurations = [
 try {
   for (const language of ["odin", "luau"]) {
     report.binaries[language] = {};
-    for (const file of ["runtime.wasm", "worker.js", "player.js", "game.png"]) {
+    for (const file of ["runtime.wasm", "worker.js", "debug-player.js", "session.js", "game.png"]) {
       const bytes = await readFile(resolve(root, language, "build/web", file));
       report.binaries[language][file] = createHash("sha256").update(bytes).digest("hex");
     }
@@ -65,7 +65,7 @@ try {
         query.set("smooth-pan", "");
       }
       await page.goto(
-        `${origin}/build/compact-3d/riverside/${language}/build/web/player.html?${query}`,
+        `${origin}/build/compact-3d/riverside/${language}/build/web/debug.html?${query}`,
       );
       await page.waitForFunction(() => window.playerStatus?.ready || window.playerStatus?.error);
       await page.locator("#start").click();

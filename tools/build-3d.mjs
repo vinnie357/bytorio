@@ -26,13 +26,14 @@ export async function build3dExamples(root = "build/compact-3d") {
       resolve(project, `src/main.${language}`),
     );
     await buildProject(project);
-    const htmlPath = resolve(project, "build/web/player.html");
-    const html = await readFile(htmlPath, "utf8");
+    const configPath = resolve(project, "build/web/player-config.json");
+    const config = JSON.parse(await readFile(configPath, "utf8"));
     await writeFile(
-      htmlPath,
-      html.replace(
-        '<script type="module" src="./player.js"></script>',
-        '<script>globalThis.playerInstructions="Arrows: edit / stress / props / perspective · Space: 640×360";</script>\n<script type="module" src="./player.js"></script>',
+      configPath,
+      JSON.stringify(
+        { ...config, instructions: "Arrows: edit / stress / props / perspective · Space: 640×360" },
+        null,
+        2,
       ),
     );
     projects.push({ language, project });

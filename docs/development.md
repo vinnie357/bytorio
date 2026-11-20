@@ -2,7 +2,7 @@
 
 This guide is for building and testing Bytorio itself. To make a game with the
 current development version, follow [Getting started](getting-started.md),
-which includes the required source setup and a first playable project.
+which uses the standalone CLI and managed SDK without this contributor toolchain.
 
 The console player and renderer are Odin on native and browser hosts. Luau and
 Odin cartridges share that player. The original C++ reference player and its
@@ -11,26 +11,57 @@ root CMake build have been removed; historical implementations remain in Git.
 ## Prerequisites
 
 Use [mise](https://mise.jdx.dev/) 2026.10.8 or newer and the pinned toolchain in
-`.mise/toolchain.toml`, included by `mise.toml`. The SDK CLI currently targets Windows
-x64 development. Players need neither a compiler nor Node.js to run.
+`.mise/toolchain.toml`, included by `mise.toml`. Source authoring targets Windows
+x64 and macOS on Apple Silicon. Players need neither a compiler nor Node.js to run.
 
 Mise installs Node.js, Odin (including SDL), the Wasmtime C API, odinfmt from OLS,
 StyLua, and the prebuilt Luau analyzer. It also installs CMake, Ninja and
 Emscripten 6.0.12. Native builds require the Windows linker prerequisites from
-Odin's installation guide. Emscripten builds the C++ Luau compiler/VM and its
+Odin's installation guide. On macOS, install Xcode Command Line Tools with
+`xcode-select --install`. The native build compiles pinned SDL3 sources and links
+the pinned Wasmtime C API statically. Emscripten builds the C++ Luau compiler/VM and its
 adapter into `luau-executor.wasm`; the Odin player runs this same module on both
 hosts. The executor uses pinned Luau sources under
 `build/luau-executor/_deps/luau-src`; the analyzer matches Luau 0.743.
 The upstream Emscripten SDK installer needs Python, which mise supplies; no
 project scripts are written in Python or require its packages.
 
+Release production builds the Intel Mac Luau analyzer from the same immutable
+source revision as the executor, shared in `experiments/luau-dependency.cmake`.
+The upstream Mac analyzer download is ARM-only. `deps:luau:analyzer` builds the
+native producer tool; game authors download its signed SDK component and do not
+need CMake, Ninja or a C++ compiler.
+
 ## Build and run
 
-The standalone authoring CLI has a separate scaffolding preview:
-`mise run build:cli` produces `build/cli/byt.exe` using pinned Bun and TypeScript.
-It currently supports project creation only; the existing source CLI remains
-the complete authoring path. See the [distribution plan](internal/cli-distribution.md)
-for supported commands and remaining work.
+The standalone authoring CLI is
+[available for Windows and Mac](https://github.com/ctxshift/bytorio/releases).
+See [Mac installation and usage](getting-started.md#macos-apple-silicon-or-intel)
+to use the published binary without a source toolchain.
+`mise run build:cli` produces `build/cli/byt.exe` on Windows or `build/cli/byt` on
+macOS using pinned Bun and TypeScript.
+It creates minimal TOML projects and provides check/build/pack/run/dev with
+SDK-managed tools and players. The source CLI retains contributor workflows for
+legacy `console.json` projects. See the [standalone specification](internal/standalone-authoring-spec.md)
+for SDK distribution and the public runtime/player contracts.
+
+The [short mise setup](getting-started.md#install-with-mise) installs the published
+CLI without the contributor toolchain. An optional
+[automatic-update recipe](mise-installation.md) covers `latest` and SDK tasks.
+`mise run test:cli-install` verifies fresh
+installation, pinned cross-platform locks, locked reinstall and offline SDK
+scaffolding against published assets. It needs network access and runs separately
+from deterministic conformance gates. `BYTORIO_CLI_VERSION` selects an exact
+version or `byt-v...` tag; its default is `latest`, including previews.
+`BYTORIO_SDK_VERSION` selects the SDK bundle fixture. CI runs this smoke test on
+Windows, Apple Silicon and Intel Macs when installation guidance changes and
+after publishing each CLI release.
+
+`mise run test:cli-archive-install` additionally exercises mise 2025.12.0 by
+default; `BYTORIO_MISE_VERSION` selects another historical version. Before an
+archive release is published, it tests newly packaged candidate archives behind
+a local metadata fixture. After publication it tests the real short pinned
+entry against GitHub. CI covers 2025.12.0 and 2026.7.0 on all three platforms.
 
 From the repository root:
 
@@ -41,8 +72,18 @@ mise run build:odin
 mise exec -- npm run serve
 ```
 
-Open `http://127.0.0.1:8080/player.html` and click **Start game**. Native:
-`./build/odin-player/native/player.exe`.
+Open `http://127.0.0.1:8080/player.html` and click **Play**. Native:
+`./build/odin-player/native/player.exe` on Windows or
+`./build/odin-player/native/player` on macOS.
+
+The complete CI and tagged-release gates run independently on Windows x64 and
+macOS arm64. Intel Mac jobs install only Node, Bun, OLS and StyLua and run
+`test:cli`; the pinned Odin release has no Intel Mac compiler asset.
+`test:native-platform` additionally checks directory
+reuse, no-replace save migration, default save locations, resident-memory
+reporting, and a relocated player in a path containing spaces. On macOS it also
+checks code signatures and ensures loader commands contain no checkout paths.
+Hardware GPU qualification remains a separate opt-in gate.
 
 For a cartridge already on the device, open `player.html?local` and use
 **Open cartridge** to select its PNG. This mode waits for file selection without
@@ -79,19 +120,29 @@ part of the full gate; `test:kart3d:gpu` additionally requires a usable GPU.
 
 ## Checks
 
-For changes affecting code, tests, build behavior or code generation, use
-`mise run validate` for the complete quality and conformance gates, including
-all existing suites, drawing batches, executor caching, and formatting after
-asset generation. CI runs the same command. For a focused iteration, pass task
-names, for example `mise run validate test:validation` or
-`mise run validate generate:check test:resources`. Existing `mise run test` and
-individual `test:*` tasks remain available with their original coverage.
+Choose local validation by behavioral risk, not file extension or whether a
+source file changed. For edits very unlikely to affect functionality or
+performance, review the diff and run only relevant focused checks. Examples
+include release titles and other display copy, comments, documentation and
+formatting. A title string inside a publishing script qualifies when release
+selection, assets, versions and publication behavior stay unchanged. Check
+formatting, syntax or links as applicable; verify changed external metadata and
+rebuild/inspect affected website pages when published there.
 
-Documentation-only prose changes do not require the full test suite. Review the
-diff, check relevant formatting and links, and rebuild/inspect affected website
-pages when published there. Executable examples, generated inputs, or documents
-consumed by tests or generators must be assessed for behavioral impact; a
-Markdown extension alone does not make a change documentation-only.
+For meaningful changes to runtime behavior, performance, compatibility, test
+expectations, dependencies, build behavior or code generation, finish edits and
+run `mise run validate` for the complete quality and conformance gates before
+completion. Assess executable examples, generated inputs and documents consumed
+by tests or generators by their actual impact. If the impact is unclear, inspect
+the consumers and broaden validation to cover the uncertainty.
+
+For focused checks, pass task names, for example
+`mise run validate test:validation` or
+`mise run validate generate:check test:resources`. Existing `mise run test` and
+individual `test:*` tasks remain available with their original coverage. CI keeps
+running the complete configured gates on pushes and pull requests, including main.
+Low-risk work can finish after focused local checks without waiting for CI unless
+requested; report those checks and any pending CI separately.
 
 The runner executes tasks sequentially and stops at the first failure. It prints
 one start/result line per task and retains complete output in unique
@@ -236,9 +287,10 @@ with multiple samples for performance measurement. Old C++-specific CTest and
 
 Use the smallest existing validation task that exercises the changed behavior.
 Let its declared dependencies select builds; run a separate build only when the
-task's documented setup requires it. Finish the implementation before the full
-completion run. After a valid pass, repeat checks only for new edits, a failure or
-an invalid report. Preserve test workloads and production optimization settings.
+task's documented setup requires it. Finish the implementation before the
+completion checks selected under [Checks](#checks). After a valid pass, repeat
+checks only for new edits, a failure or an invalid report. Preserve test workloads
+and production optimization settings.
 
 | Situation | Action |
 | --- | --- |
@@ -349,3 +401,7 @@ either contract. This updates the Odin, Luau, C++ bridge and browser constants;
 `mise run lint` checks that generated files are current. Keep unrelated meanings
 separate: a white tint, an integer limit and a checksum mask can have the same
 value without being the same constant.
+
+The software renderer's generated sRGB lookup tables use rational samples and
+integer fifth roots. This keeps their full-precision source text reproducible
+across hosts whose floating-point power functions differ in their last digits.

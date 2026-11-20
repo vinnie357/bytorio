@@ -1,15 +1,52 @@
 ["build:cli"]
-description = "Build the standalone Windows x64 CLI scaffolding preview"
+description = "Build the standalone Windows/macOS authoring CLI"
 run = "node tools/build-cli.mjs"
 
 ["test:cli"]
 description = "Verify the compiled CLI without a checkout or tools on PATH"
-run = ["node tools/build-cli.mjs", "node tools/verify-cli.mjs", "node tools/build-sdk-release.mjs", "node --test tools/cli/sdk-bundle.test.mjs tools/release-config.test.mjs"]
+run = ["node tools/build-cli.mjs", "node tools/build-sdk-release.mjs", "node tools/verify-cli.mjs", "node --test tools/cli/sdk-bundle.test.mjs tools/cli/sdk-manifest.test.mjs tools/cli/sdk-registry.test.mjs tools/cli/component-cache.test.mjs tools/release-config.test.mjs tools/sdk/component.test.mjs tools/sdk/assemble.test.mjs tools/cli/project-config.test.mjs tools/cli/output.test.mjs", "node tools/verify-sdk-component.mjs"]
 
 ["build:sdk-release"]
 description = "Package a versioned SDK for a GitHub release"
 run = "node tools/build-sdk-release.mjs"
 
+["build:sdk-components"]
+description = "Produce a host SDK candidate with an explicit version and CLI compatibility range"
+depends = ["build:odin", "deps:luau"]
+run = "node tools/build-sdk-components.mjs"
+
+["assemble:sdk-release"]
+description = "Assemble verified host SDK candidates using one canonical set of shared components"
+run = "node tools/assemble-sdk-release.mjs"
+
+["package:sdk-candidate"]
+description = "Package the current tagged SDK host candidate"
+depends = ["build:odin", "deps:luau"]
+run = "node tools/release-sdk.mjs candidate"
+
+["package:sdk-intel"]
+description = "Package Intel Mac Luau tools against the canonical candidate"
+depends = ["deps:luau:analyzer"]
+run = "node tools/release-sdk.mjs intel"
+
+["package:sdk-assemble"]
+description = "Assemble the tagged SDK release from all qualified host candidates"
+run = "node tools/release-sdk.mjs assemble"
+
+["test:sdk-release"]
+description = "Qualify the exact CLI and assembled SDK bytes without source tools"
+run = "node tools/verify-sdk-authoring.mjs"
+
+["test:cli-worker"]
+description = "Qualify compiled Worker/Wasm checking without a checkout or global tools"
+depends = ["deps:player:web-cpu", "deps:luau"]
+run = ["node --test tools/sdk/check.test.mjs tools/sdk/bundle-format.test.mjs", "node tools/verify-cli-worker.mjs"]
+
+["test:sdk-authoring"]
+description = "Build and play from a versioned SDK without checkout or global tools"
+depends = ["build:odin", "deps:luau"]
+run = ["node tools/build-cli.mjs", "node --test tools/cli/released-sdk.test.mjs tools/sdk/compiler.test.mjs", "node tools/verify-sdk-authoring.mjs"]
+
 ["package:release"]
 description = "Package tested CLI or SDK assets for BYTORIO_RELEASE_TAG"
-run = ["node tools/package-release.mjs", "node tools/publish-release.mjs --check"]
+run = ["node tools/package-release.mjs", "node tools/publish-release.mjs --check --platform {{ os() }}-{{ arch() }}"]

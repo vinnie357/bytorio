@@ -2,16 +2,16 @@
 
 Design rationale: [import artist formats during development](adr/0014-import-model-formats-during-development.md).
 
-`byt import` converts a bounded glTF 2.0 JSON or GLB asset into one normalized
+The contributor import tool converts a bounded glTF 2.0 JSON or GLB asset into one normalized
 model plus readable Luau and Odin modules. Games use existing typed textures,
 materials and immutable textured meshes. No glTF parser runs in the cartridge,
 no runtime ABI changes, and CPU rendering remains the default.
 
-With `byt` installed, from the folder containing your assets and game project:
+This importer is currently a contributor command; ordinary standalone creation,
+building and playback do not require it. From the Bytorio source checkout:
 
 ```text
-byt import art/kart.glb --output my-game/src/imported
-byt build my-game
+mise run byt -- import <asset.glb> --output <game>/src/imported
 ```
 
 The generated directory contains `model.json`, `model.luau` and `model.odin`.
@@ -32,7 +32,8 @@ files are needed by the exported native player, browser player or PNG cartridge.
 The import report names the minimum SDK/profile and counts input bytes, upload
 bytes, unique vertices/triangles, instance draws and generated source bytes.
 Opaque assets require SDK 0.4.0 / `textured-3d-preview-1`; masked assets require
-SDK 0.5.0 / `alpha-3d-preview-1`. Set both `sdk` and `profile` in `console.json`.
+SDK 0.5.0 / `alpha-3d-preview-1`. Set the required `profile` in `bytorio.toml`;
+the distribution pin selects an SDK that supports it.
 The generated loader checks the SDK before allocating resources.
 
 ## Supported artist export

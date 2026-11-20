@@ -19,7 +19,7 @@ const { values } = parseArgs({
   },
 });
 const changes = {
-  browser: "runtime/odin/web/player.js",
+  browser: "runtime/odin/web/web-player.js",
   "unrelated-test": "tests/3d/renderer_test.odin",
   "shared-runtime": "runtime/odin/resources/resources.odin",
 };

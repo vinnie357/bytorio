@@ -21,6 +21,7 @@ sources = [
   "runtime/odin/web/**/*.odin",
   "tools/player-build.mjs",
   "tools/toolchain.mjs",
+  "tools/host-platform.mjs",
   "tools/command-timing.mjs",
   ".mise/toolchain.toml",
   "runtime/odin/web/constants.js",
@@ -42,6 +43,7 @@ sources = [
   "runtime/odin/web/**/*.odin",
   "tools/player-build.mjs",
   "tools/toolchain.mjs",
+  "tools/host-platform.mjs",
   "tools/command-timing.mjs",
   ".mise/toolchain.toml",
   "runtime/odin/web/constants.js",
@@ -58,6 +60,7 @@ sources = [
   "runtime/odin/resource_protocol/**/*.odin",
   "tools/player-build.mjs",
   "tools/toolchain.mjs",
+  "tools/host-platform.mjs",
   "tools/command-timing.mjs",
   ".mise/toolchain.toml",
   "runtime/odin/web/constants.js",
@@ -68,7 +71,7 @@ outputs = [
 run = "node tools/player-build.mjs web-audio"
 
 ["deps:player:native-binary"]
-depends = ["deps:vorbis"]
+depends = ["deps:vorbis:native", "deps:sdl3:native"]
 sources = [
   "runtime/odin/abi/**/*.odin",
   "runtime/odin/audio/**/*.odin",
@@ -87,12 +90,13 @@ sources = [
   "runtime/odin/gpu/*.frag",
   "tools/player-build.mjs",
   "tools/toolchain.mjs",
+  "tools/host-platform.mjs",
   "tools/command-timing.mjs",
   ".mise/toolchain.toml",
   "runtime/odin/web/constants.js",
 ]
 outputs = [
-  "build/odin-player/native/player.exe",
+  "build/odin-player/native/{% if os() == 'windows' %}player.exe{% else %}player{% endif %}",
 ]
 run = "node tools/player-build.mjs native"
 
@@ -102,6 +106,7 @@ sources = [
   "runtime/odin/abi/**/*.odin",
   "tools/player-build.mjs",
   "tools/toolchain.mjs",
+  "tools/host-platform.mjs",
   "tools/command-timing.mjs",
   ".mise/toolchain.toml",
 ]
@@ -117,6 +122,7 @@ sources = [
   "runtime/odin/abi/**/*.odin",
   "tools/player-build.mjs",
   "tools/toolchain.mjs",
+  "tools/host-platform.mjs",
   "tools/command-timing.mjs",
   ".mise/toolchain.toml",
 ]
@@ -137,17 +143,29 @@ depends = ["deps:vorbis"]
 sources = [
   "runtime/odin/web/*.js",
   "runtime/odin/web/*.html",
+  "sdk/examples/custom-player/**",
   "runtime/odin/gpu/*.vert",
   "runtime/odin/gpu/*.frag",
   "tools/stage-player.mjs",
   "tools/player-export.mjs",
   "tools/toolchain.mjs",
+  "tools/host-platform.mjs",
   "tools/command-timing.mjs",
   ".mise/toolchain.toml",
 ]
 outputs = [
   "build/odin-player/web/player.html",
-  "build/odin-player/web/player.js",
+  "build/odin-player/web/custom-player.html",
+  "build/odin-player/web/custom-player.js",
+  "build/odin-player/web/debug-player.js",
+  "build/odin-player/web/debug.html",
+  "build/odin-player/web/bootstrap.js",
+  "build/odin-player/web/runtime.js",
+  "build/odin-player/web/session.js",
+  "build/odin-player/web/input.js",
+  "build/odin-player/web/web-player.js",
+  "build/odin-player/web/player-input.js",
+  "build/odin-player/web/player-config.js",
   "build/odin-player/web/worker.js",
   "build/odin-player/web/policy.js",
   "build/odin-player/web/audio-worklet.js",
@@ -181,17 +199,19 @@ outputs = [
 run = "node tools/stage-player.mjs web"
 
 ["deps:player:native-support"]
-depends = ["deps:vorbis"]
+depends = ["deps:vorbis", "deps:sdl3:native"]
 sources = [
   "tools/stage-player.mjs",
   "tools/player-export.mjs",
   "tools/toolchain.mjs",
+  "tools/host-platform.mjs",
   "tools/command-timing.mjs",
   ".mise/toolchain.toml",
 ]
 outputs = [
-  "build/odin-player/native/SDL3.dll",
-  "build/odin-player/native/wasmtime.dll",
+  "build/odin-player/native/{% if os() == 'windows' %}SDL3.dll{% else %}libSDL3.0.dylib{% endif %}",
+  # Wasmtime is static off Windows; its license stands in so every host declares real files.
+  "build/odin-player/native/{% if os() == 'windows' %}wasmtime.dll{% else %}licenses/wasmtime.txt{% endif %}",
   "build/odin-player/native/licenses/wasmtime.txt",
   "build/odin-player/native/licenses/sdl3.txt",
   "build/odin-player/native/licenses/odin.txt",

@@ -1,0 +1,104 @@
+name: Verify published CLI installation
+
+on:
+  push:
+    branches:
+      - "**"
+    paths:
+      - "install/**"
+      - "tools/verify-cli-install.mjs"
+      - "tools/verify-cli-archive-install.mjs"
+      - "tools/cli-release-archive.mjs"
+      - "tools/package-release.mjs"
+      - "tools/host-platform.mjs"
+      - "tools/release-config.mjs"
+      - "mise.toml"
+      - "docs/getting-started.md"
+      - "docs/mise-installation.md"
+      - ".github/workflows/cli-install.yml"
+      - ".github/workflows/release.yml"
+  pull_request:
+    paths:
+      - "install/**"
+      - "tools/verify-cli-install.mjs"
+      - "tools/verify-cli-archive-install.mjs"
+      - "tools/cli-release-archive.mjs"
+      - "tools/package-release.mjs"
+      - "tools/host-platform.mjs"
+      - "tools/release-config.mjs"
+      - "mise.toml"
+      - "docs/getting-started.md"
+      - "docs/mise-installation.md"
+      - ".github/workflows/cli-install.yml"
+      - ".github/workflows/release.yml"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "CLI version or byt-v tag; latest includes previews"
+        default: latest
+        type: string
+  workflow_call:
+    inputs:
+      version:
+        default: latest
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  install:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [windows-latest, macos-15, macos-15-intel]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    env:
+      PLAYER_BROWSER_CHANNEL: chrome
+      MISE_TASK_RUN_AUTO_INSTALL: "false"
+      BYTORIO_CLI_VERSION: ${{ inputs.version || 'latest' }}
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v4
+        with:
+          version: 2026.10.8
+          install_args: node
+      - run: npm ci
+      - name: Verify the consumer installation workflow
+        run: mise run test:cli-install
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cli-install-${{ matrix.runner }}
+          path: |
+            build/cli-install-verification/
+            build/published-authoring-verification/
+
+  legacy:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [windows-latest, macos-15, macos-15-intel]
+        mise: [2025.12.0, 2026.7.0]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    env:
+      MISE_TASK_RUN_AUTO_INSTALL: "false"
+      BYTORIO_CLI_VERSION: ${{ inputs.version || 'latest' }}
+      BYTORIO_MISE_VERSION: ${{ matrix.mise }}
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v4
+        with:
+          version: 2026.10.8
+          install_args: node
+      - name: Verify installation with the older mise executable
+        run: mise run test:cli-archive-install
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cli-archive-${{ matrix.runner }}-${{ matrix.mise }}
+          path: build/cli-archive-verification/

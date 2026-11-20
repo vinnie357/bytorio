@@ -6,7 +6,7 @@ import { timedSpawnSync as spawnSync } from "./command-timing.mjs";
 import { once } from "node:events";
 import { chromium } from "./browser-timing.mjs";
 import { createProject, buildProject } from "./sdk/project.mjs";
-import { dependencyRoot, toolRoot, task } from "./toolchain.mjs";
+import { task, copySdlLibrary, copyWasmtimeLibrary, nativePlayer } from "./toolchain.mjs";
 import { odinUnitTests } from "./odin-unit-tests.mjs";
 import { serve } from "./serve.mjs";
 import { resourceSchema as limits } from "../runtime/odin/web/constants.js";
@@ -37,11 +37,10 @@ function run(exe, args, env = {}, diagnostics = false) {
   assert.equal(result.status, 0, result.stdout + result.stderr || String(result.error));
   return result.stdout + (diagnostics ? result.stderr : "");
 }
-const deps = dependencyRoot();
 task("deps:trace:audio");
 await copyFile("build/validation-tools/audio/trace.exe", resolve(root, "trace.exe"));
-await copyFile(resolve(deps, "wasmtime.dll"), resolve(root, "wasmtime.dll"));
-await copyFile(resolve(toolRoot("odin"), "vendor/sdl3/SDL3.dll"), resolve(root, "SDL3.dll"));
+await copyWasmtimeLibrary(root);
+await copySdlLibrary(root);
 const report = {
   synthesis,
   stress,
@@ -73,7 +72,7 @@ for (const language of ["odin", "luau"]) {
   await buildProject(project);
   projects[language] = project;
   const player = JSON.parse(
-    run(resolve(project, "build/native/player.exe"), ["--smoke"], {
+    run(resolve(project, "build/native", nativePlayer), ["--smoke"], {
       SDL_VIDEODRIVER: "dummy",
       SDL_AUDIODRIVER: "dummy",
       SDL_RENDER_DRIVER: "software",
@@ -600,7 +599,7 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/harness.html`);
   for (const language of ["odin", "luau"]) {
     const result = await page.evaluate(
-      async ({ language }) => {
+      async ({ language, limits }) => {
         const base = `./${language}/build/web/`;
         await (await fetch(`${base}audio.wasm`)).arrayBuffer();
         const context = new AudioContext({ sampleRate: 48000 });
@@ -639,6 +638,21 @@ try {
           }
         };
         const packet = await (await fetch(`${base}prepared-audio.bin`)).arrayBuffer();
+        const simulationFrame = 43200;
+        const packetView = new DataView(packet);
+        packetView.setBigUint64(
+          limits.audioPacketSimulationFrameOffset,
+          BigInt(simulationFrame),
+          true,
+        );
+        for (let i = 0; i < packetView.getUint32(4, true); i++) {
+          const at = limits.audioPacketHeaderBytes + i * limits.audioEventBytes;
+          packetView.setBigUint64(
+            at,
+            packetView.getBigUint64(at, true) + BigInt(simulationFrame),
+            true,
+          );
+        }
         mixer.port.postMessage(
           { type: "packet", id: 0, buffer: packet, bytes: packet.byteLength },
           [packet],
@@ -680,6 +694,7 @@ try {
         return {
           pcm: Array.from(new Float32Array(pcm)),
           before,
+          simulationFrame,
           after,
           paused,
           stillPaused,
@@ -689,10 +704,14 @@ try {
           isolated: crossOriginIsolated,
         };
       },
-      { language },
+      { language, limits },
     );
     assert.equal(result.error, "");
     assert.equal(result.isolated, false);
+    assert.ok(
+      result.before >= result.simulationFrame,
+      "delayed mixer anchors feedback to simulation",
+    );
     assert.ok(result.after - result.before > 20000, "worklet survives main-thread stall");
     assert.equal(result.paused, result.stillPaused, "pause freezes logical DSP time after fade");
     assert.ok(
@@ -738,7 +757,7 @@ try {
     };
     await page.route("**/audio.wasm", delayMixer);
     await page.goto(
-      `http://127.0.0.1:${server.address().port}/startup-${language}/build/web/player.html`,
+      `http://127.0.0.1:${server.address().port}/startup-${language}/build/web/debug.html`,
     );
     await page.waitForFunction(() => playerStatus.ready || playerStatus.error);
     assert.equal(await page.evaluate(() => playerStatus.error), "");
@@ -777,7 +796,7 @@ try {
       "",
       "audio scheduling continues after startup",
     );
-    await page.goto(`http://127.0.0.1:${server.address().port}/${language}/build/web/player.html`);
+    await page.goto(`http://127.0.0.1:${server.address().port}/${language}/build/web/debug.html`);
     await page.waitForFunction(() => playerStatus.ready || playerStatus.error);
     assert.equal(await page.evaluate(() => playerStatus.error), "");
     await page.click("#start");

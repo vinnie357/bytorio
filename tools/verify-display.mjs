@@ -5,7 +5,7 @@ import { resolve } from "node:path";
 import { once } from "node:events";
 import { chromium } from "./browser-timing.mjs";
 import { serve } from "./serve.mjs";
-import { tool } from "./toolchain.mjs";
+import { tool, nativePlayer } from "./toolchain.mjs";
 import {
   submitDrawing,
   rasterizeDrawing,
@@ -62,7 +62,7 @@ for (let i = 0; i < 120; i++) {
 await writeFile(`${root}/display.inputs`, Array(120).fill(0).join("\n") + "\n");
 function native(path) {
   return spawnSync(
-    resolve(`${root}/native/player.exe`),
+    resolve(`${root}/native/${nativePlayer}`),
     ["--game", path, "--replay", `${root}/display.inputs`],
     { encoding: "utf8", timeout: 30000 },
   );
@@ -74,7 +74,7 @@ const bad = native(`${web}/display/invalid.wasm`);
 assert.notEqual(bad.status, 0);
 assert.match(bad.stderr, /unsupported display mode/);
 const presented = spawnSync(
-  resolve(`${root}/native/player.exe`),
+  resolve(`${root}/native/${nativePlayer}`),
   ["--game", `${web}/display/switch.wasm`, "--smoke"],
   {
     encoding: "utf8",
@@ -125,7 +125,7 @@ const browser = await chromium.launch({
 try {
   const page = await browser.newPage({ viewport: { width: 1366, height: 768 } });
   await page.goto(
-    `http://127.0.0.1:${server.address().port}/player.html?game=./display/switch.wasm`,
+    `http://127.0.0.1:${server.address().port}/debug.html?game=./display/switch.wasm`,
   );
   await page.waitForFunction(() => playerStatus.ready || playerStatus.error);
   assert.equal(await page.evaluate(() => playerStatus.error), "");
@@ -182,7 +182,7 @@ try {
   });
   assert.deepEqual(traces, expected);
   await page.goto(
-    `http://127.0.0.1:${server.address().port}/player.html?game=./display/invalid.wasm`,
+    `http://127.0.0.1:${server.address().port}/debug.html?game=./display/invalid.wasm`,
   );
   await page.waitForFunction(() => playerStatus.error);
   assert.match(await page.evaluate(() => playerStatus.error), /Unsupported display mode/);

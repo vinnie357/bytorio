@@ -2,12 +2,13 @@ import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { createHash } from "node:crypto";
 import { branding } from "./branding.mjs";
-import { repo, run, tool } from "./toolchain.mjs";
+import { repo, run } from "./toolchain.mjs";
+import { compileCli } from "./compile-cli.mjs";
 import { cliVersion } from "./release-config.mjs";
+import { requireCliHost } from "./host-platform.mjs";
+import { dependencyNotices } from "./dependency-notices.mjs";
 
-if (process.platform !== "win32" || process.arch !== "x64") {
-  throw new Error("Standalone CLI preview is currently qualified only for Windows x64");
-}
+const host = requireCliHost();
 
 const output = resolve(repo, "build/cli");
 await mkdir(output, { recursive: true });
@@ -29,34 +30,26 @@ await writeFile(
   resolve(output, "assets.ts"),
   `export const assets: Record<string, string> = ${JSON.stringify(assets)};\n` +
     `export const branding = ${JSON.stringify(branding)};\n` +
-    `export const version = ${JSON.stringify(version)};\n`,
+    `export const version = ${JSON.stringify(version)};\n` +
+    `export const notices = ${JSON.stringify(await dependencyNotices())};\n`,
 );
 run(process.execPath, [
   resolve(repo, "node_modules/typescript/bin/tsc"),
   "-p",
   "tools/cli/tsconfig.json",
 ]);
-const executable = resolve(output, "byt.exe");
-run(tool("bun"), [
-  "build",
-  "--compile",
-  "--no-compile-autoload-dotenv",
-  "--no-compile-autoload-bunfig",
-  "--no-compile-autoload-tsconfig",
-  "--no-compile-autoload-package-json",
-  "tools/cli/main.ts",
-  "--outfile",
-  executable,
-]);
+const executable = resolve(output, host.executable);
+compileCli(["tools/cli/main.ts"], executable);
 const bytes = await readFile(executable);
 await writeFile(
   resolve(output, "release.json"),
   JSON.stringify(
     {
       version,
-      platform: "windows-x64",
-      status: "scaffolding-preview",
-      executable: "byt.exe",
+      platform: host.id,
+      status: "standalone-authoring-preview",
+      executable: host.executable,
+      asset: host.cliAsset,
       bytes: bytes.length,
       sha256: createHash("sha256").update(bytes).digest("hex"),
       sdkAssets: paths.sort(),
@@ -65,4 +58,4 @@ await writeFile(
     2,
   ) + "\n",
 );
-console.log(`Built standalone CLI preview: build/cli/byt.exe (${bytes.length} bytes)`);
+console.log(`Built standalone CLI preview: build/cli/${host.executable} (${bytes.length} bytes)`);

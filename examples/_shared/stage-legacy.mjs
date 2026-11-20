@@ -41,10 +41,24 @@ for (const platform of ["web", "native"]) {
 const html = await readFile(`${root}/web/player.html`, "utf8");
 await writeFile(
   `${root}/web/player.html`,
-  html.replace("</body>", '<script type="module" src="./controls.js"></script>\n</body>'),
+  html.replace("</main>", '<p><a href="./comparison.html">Choose cartridge</a></p></main>'),
 );
-const controls = await readFile(`examples/${cartridge}/shared/controls.js`, "utf8");
-await writeFile(`${root}/web/controls.js`, controls);
+await writeFile(
+  `${root}/web/player-config.json`,
+  JSON.stringify(
+    {
+      instructions: racing
+        ? "Arrows / WASD steer, accelerate and brake. Space boosts."
+        : "Arrows / WASD move. Space talks and confirms.",
+      controls: {
+        visibility: "always",
+        overrides: { action: { label: racing ? "Boost" : "Confirm" } },
+      },
+    },
+    null,
+    2,
+  ),
+);
 const launcher = await readFile(`examples/${cartridge}/shared/launcher.html`, "utf8");
 await writeFile(`${root}/web/comparison.html`, launcher);
 console.log(`Unified prototype staged in ${root}.`);

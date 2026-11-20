@@ -2,10 +2,17 @@
 import { resolve } from "node:path";
 import { spawn } from "node:child_process";
 import { watch } from "node:fs";
-import { createProject, checkProject, buildProject, packProject } from "./sdk/project.mjs";
+import {
+  createProject,
+  checkProject,
+  buildProject,
+  packProject,
+  requireNativePlayer,
+} from "./sdk/project.mjs";
 import { serve } from "./serve.mjs";
 import { parseFrameRate } from "../runtime/odin/web/frame-clock.js";
 import { branding } from "./branding.mjs";
+import { nativePlayer } from "./toolchain.mjs";
 import { importModel } from "./sdk/import-model.mjs";
 
 const MAX_TCP_PORT = 65535;
@@ -43,6 +50,9 @@ try {
     if (options.web && options.native) {
       throw new Error("Choose --web or --native");
     }
+    if (options.native && (action === "run" || action === "watch")) {
+      requireNativePlayer();
+    }
     if (options.fps !== undefined) {
       parseFrameRate(options.fps);
     }
@@ -66,7 +76,7 @@ try {
         if (options.fps !== undefined) {
           flags.push("--fps", options.fps);
         }
-        child = spawn(resolve(base, "player.exe"), flags, { stdio: "inherit" });
+        child = spawn(resolve(base, nativePlayer), flags, { stdio: "inherit" });
         child.on("error", (error) => console.error(error.message));
       };
       if (options.native) {

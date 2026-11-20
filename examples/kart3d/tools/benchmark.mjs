@@ -6,7 +6,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { cpus, platform, arch, totalmem } from "node:os";
 import { chromium } from "../../../tools/browser-timing.mjs";
 import { serve } from "../../../tools/serve.mjs";
-import { run } from "../../../tools/toolchain.mjs";
+import { run, nativePlayer } from "../../../tools/toolchain.mjs";
 import { course } from "./course.mjs";
 import * as policy from "../../../runtime/odin/web/policy.js";
 
@@ -161,7 +161,7 @@ try {
       artifactFiles.push("luau-executor.wasm");
     }
     const artifacts = {};
-    for (const file of [...artifactFiles.map((name) => `web/${name}`), "native/player.exe"]) {
+    for (const file of [...artifactFiles.map((name) => `web/${name}`), `native/${nativePlayer}`]) {
       artifacts[file] = createHash("sha256")
         .update(await readFile(resolve(base, file)))
         .digest("hex");
@@ -205,7 +205,7 @@ try {
           console.log(`Starting ${name}`);
           const native = JSON.parse(
             run(
-              resolve(base, "native/player.exe"),
+              resolve(base, `native/${nativePlayer}`),
               [
                 "--benchmark",
                 input,

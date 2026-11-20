@@ -12,6 +12,7 @@
   },
   "targets": {
     "guestMemoryBytes": 8388608,
+    "luauMemoryBytes": 67108864,
     "luauHeapBytes": 4194304,
     "resourceSlots": 1024,
     "runtimeResourceBytes": 67108864,

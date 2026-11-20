@@ -25,7 +25,7 @@
     "payloadMagic": "CART",
     "profileId": 2,
     "headerBytes": 32,
-    "maxPngBytes": 2097152,
+    "maxPngBytes": 10485760,
     "content": {"magic": 1414419523, "version": 1, "headerBytes": 12, "recordBytes": 12, "maxEntries": 65536, "maxBytes": 536870912, "maxReadBytes": 1048576, "headerFields": {"magic": 0, "version": 4, "count": 8}, "recordFields": {"id": 0, "offset": 4, "length": 8}},
     "maxCoverWidth": 1024,
     "maxCoverHeight": 1024,
@@ -35,9 +35,11 @@
     "fields": {"magic": 0, "version": 4, "language": 6, "profile": 7, "sdkVersion": 8, "abiVersion": 12, "width": 16, "height": 18, "titleBytes": 20, "codeBytes": 24, "flags": 28}
   },
   "limits": {
-    "moduleBytes": 1048576,
+    "moduleBytes": 8388608,
     "guestMemoryBytes": 8388608,
-    "luauSourceBytes": 262144,
+    "luauSourceBytes": 8388608,
+    "luauInitialMemoryBytes": 4194304,
+    "luauMemoryBytes": 67108864,
     "luauHeapBytes": 4194304,
     "commands": 16384,
     "textBytes": 16384,

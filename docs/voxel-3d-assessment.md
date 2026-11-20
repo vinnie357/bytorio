@@ -77,9 +77,10 @@ for the first experiment.
 ## Memory and packaging constraints
 
 The published [resource profile](resource-profile.md) and
-[machine-readable limits](../sdk/profiles/resource-av-1.json) remain unchanged.
-They currently allow 8 MiB guest memory, a 4 MiB Luau heap, a 64 MiB resource
-budget and 1 MiB payload per commit. The fixed audio/control reservation is
+[machine-readable limits](../sdk/profiles/resource-av-1.json) define the resource budgets.
+They currently allow 8 MiB Odin guest memory, a 4 MiB Luau heap, a 64 MiB resource
+budget and 1 MiB payload per commit. Luau's separate executor-memory ceiling is
+64 MiB to accommodate source and compilation. The fixed audio/control reservation is
 55,463,952 bytes when that path is activated, leaving 11,644,912 bytes (about
 11.1 MiB) of resource headroom before other allocations.
 
@@ -105,10 +106,11 @@ occupied cells has 12,288 exposed cube faces, or 24,576 triangles before any
 additional rendering work. Dense solid models can be far cheaper despite
 containing more occupied cells.
 
-Current PNG cartridges are capped at 2 MiB and embed assets with game code.
-Small models can use that path; large asset sets, indexed reads and chunk
-streaming belong to milestone 5. Compressed cartridge size does not establish a
-safe decoded resource size.
+Current PNG cartridges allow a 10 MiB cover/code envelope, including an 8 MiB
+Wasm module, plus separately indexed content up to 512 MiB.
+Small models can embed data with their code; larger asset sets can use bounded
+indexed-content reads. Compressed cartridge size does not establish a safe
+decoded resource size.
 
 Any supported 3D extension needs an explicit profile/feature negotiation decision
 and measured budgets. Do not silently expand or reinterpret the published

@@ -66,8 +66,14 @@ the existing input representation instead of introducing a redundant input buffe
 Missing features or exports stop loading. Both hosts enforce the same bounds.
 
 PNG container version 1 accepts profile 1 and profile 2, preserving the existing
-32-byte header layout. This profile does not increase the implemented 2 MiB PNG limit or enable the planned
-128/512 MB ROM sizes; the larger indexed-resource cartridge format is separate work.
+32-byte header layout. The current player allows an 8 MiB Wasm module or bundled
+Luau source within a
+10 MiB cover/code envelope, plus optional indexed content up to 512 MiB. These
+storage budgets retain Odin's 8 MiB guest memory limit, the 4 MiB Luau VM heap
+cap and the resource profile's execution and decoded-resource allowances. Luau's
+executor has a separate 64 MiB memory ceiling for source and compilation.
+See [PNG cartridges](png-cartridges.md) for
+compatibility with earlier players.
 
 ## 2. Ownership, types and lifetime
 

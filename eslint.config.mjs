@@ -39,6 +39,7 @@ export default [
   {
     files: [
       "runtime/**/web/*.js",
+      "sdk/examples/**/*.js",
       "examples/**/shared/*.js",
       "site/**/*.js",
       "experiments/vorbis-prototype/*.js",

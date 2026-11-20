@@ -50,7 +50,9 @@ static_assert(sizeof(Frame) == 40 && offsetof(Frame, x) == 24);
 static_assert(sizeof(Command) == 32);
 constexpr std::size_t source_capacity = MAX_LUAU_SOURCE_BYTES, heap_limit = MAX_LUAU_HEAP_BYTES,
                       max_commands = MAX_COMMANDS;
-char source[source_capacity], error[1024];
+char* source;
+std::size_t source_reserved;
+char error[1024];
 std::uint32_t source_size, buttons, command_count;
 bool pointer_active;
 double pointer_x, pointer_y;
@@ -392,7 +394,27 @@ EMSCRIPTEN_KEEPALIVE std::uint32_t game_frame_size() {
     return sizeof(Frame);
 }
 
+EMSCRIPTEN_KEEPALIVE char* game_source_allocate(std::uint32_t size) {
+    if (!size || size > source_capacity) {
+        fail("invalid Luau source allocation size");
+        return nullptr;
+    }
+    if (size != source_reserved) {
+        auto* buffer = static_cast<char*>(std::realloc(source, size));
+        if (!buffer) {
+            fail("cannot allocate Luau source buffer");
+            return nullptr;
+        }
+        source = buffer;
+        source_reserved = size;
+        source_size = 0;
+    }
+    return source;
+}
+
 EMSCRIPTEN_KEEPALIVE char* game_source_buffer() {
+    if (source_reserved < source_capacity)
+        return game_source_allocate(source_capacity);
     return source;
 }
 
@@ -401,6 +423,11 @@ EMSCRIPTEN_KEEPALIVE std::uint32_t game_source_capacity() {
 }
 
 EMSCRIPTEN_KEEPALIVE void game_source_size(std::uint32_t size) {
+    if (!size || size > source_reserved) {
+        source_size = 0;
+        fail("invalid Luau source size");
+        return;
+    }
     source_size = size;
     constexpr char marker[] = "--!console-profile=";
     constexpr auto prefix = sizeof(marker) - 1;
@@ -443,7 +470,7 @@ EMSCRIPTEN_KEEPALIVE void game_init() {
     pointer_active = false;
     pointer_x = pointer_y = 0;
     frame = {1, DEFAULT_CLEAR_COLOR, COORDINATE_MIN, COORDINATE_MIN, 0, 0, 0, 0};
-    if (!source_size || source_size > source_capacity) {
+    if (!source_size || source_size > source_reserved) {
         fail("invalid Luau source size");
         return;
     }

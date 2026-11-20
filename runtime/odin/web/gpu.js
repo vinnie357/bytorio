@@ -49,7 +49,7 @@ export async function createGpu(settings) {
   const sources = Object.fromEntries(
     await Promise.all(
       names.map(async (name) => {
-        const response = await fetch(`./gpu-shaders/${name}`);
+        const response = await fetch(new URL(`./gpu-shaders/${name}`, import.meta.url));
         if (!response.ok) {
           throw new Error(`Cannot load GPU shader ${name}.`);
         }

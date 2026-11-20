@@ -18,7 +18,7 @@ for (const title of ["Cache revision A", "Cache revision B"]) {
   await writeFile(resolve(project, "console.json"), JSON.stringify(config, null, 2));
   const packed = await packProject(project);
   const png = await readFile(packed.cartridge);
-  const html = await readFile(resolve(project, "build/web/player.html"), "utf8");
+  const html = await readFile(resolve(project, "build/web/debug.html"), "utf8");
   const revision = createHash("sha256").update(png).digest("hex");
   assert(
     html.includes(`./game.png?revision=${revision}`),
@@ -40,7 +40,7 @@ const server = createServer(async (request, response) => {
       bytes =
         revisions.find((item) => item.revision === url.searchParams.get("revision"))?.png ||
         selected.png;
-    } else if (url.pathname === "/player.html") {
+    } else if (url.pathname === "/debug.html") {
       bytes = Buffer.from(selected.html);
     } else {
       const path = resolve(base, `.${url.pathname}`);
@@ -92,7 +92,7 @@ let browser;
 try {
   browser = await chromium.launch({ channel: process.env.PLAYER_BROWSER_CHANNEL || undefined });
   const page = await browser.newPage();
-  const url = `http://127.0.0.1:${server.address().port}/player.html`;
+  const url = `http://127.0.0.1:${server.address().port}/debug.html`;
   const ready = async (title) => {
     await page.waitForFunction(
       () => globalThis.playerStatus?.ready || globalThis.playerStatus?.error,

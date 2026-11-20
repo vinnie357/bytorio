@@ -7,6 +7,7 @@ import { chromium } from "playwright";
 import { serveSite } from "./serve-site.mjs";
 import { games } from "../site/catalog.mjs";
 import { repo } from "./toolchain.mjs";
+import { bindPlayer } from "./browser-player.mjs";
 
 const output = resolve(repo, "build/site");
 const artifacts = resolve(repo, "build/site-verification");
@@ -119,44 +120,61 @@ try {
         await mobile.locator("#language").selectOption(language);
       }
       const frame = await (await mobile.locator("iframe").elementHandle()).contentFrame();
-      await frame.waitForFunction(() => globalThis.playerStatus?.ready, null, { timeout: 60000 });
-      assert.equal(await frame.evaluate(() => globalThis.playerStatus.error), "");
-      await frame.locator("#start").click();
-      await frame.waitForFunction(() => globalThis.playerStatus.ticks > 5);
+      await bindPlayer(frame);
+      await frame.waitForFunction(() => window.hostedPlayer.runtime.getSnapshot().ready, null, {
+        timeout: 60000,
+      });
+      assert.equal(
+        await frame.evaluate(async () => window.hostedPlayer.runtime.getSnapshot().error),
+        "",
+      );
+      await frame.getByRole("button", { name: "Play game", exact: true }).click();
+      await frame.waitForFunction(() => window.hostedPlayer.runtime.getSnapshot().ticks > 5);
       if (game.id === "copper-circuit") {
-        await frame.waitForFunction(() => globalThis.playerStatus.ticks > 190);
+        await frame.waitForFunction(() => window.hostedPlayer.runtime.getSnapshot().ticks > 190);
       }
-      const initial = await frame.evaluate(() => ({
+      const initial = await frame.evaluate(async () => ({
         spawnPixels: Array.from(
-          document.querySelector("#canvas").getContext("2d").getImageData(80, 88, 16, 16).data,
+          window.hostedPlayer.element.shadowRoot
+            .querySelector("canvas")
+            .getContext("2d")
+            .getImageData(80, 88, 16, 16).data,
         ),
-        hash: globalThis.playerStatus.hash,
-        ticks: globalThis.playerStatus.ticks,
+        hash: window.hostedPlayer.runtime.getSnapshot().hash,
+        ticks: window.hostedPlayer.runtime.getSnapshot().ticks,
       }));
       const direction = frame.locator(
-        `[data-code="${game.id === "mossglen" ? "ArrowRight" : "ArrowUp"}"]`,
+        `[data-control="${game.id === "mossglen" ? "right" : "up"}"]`,
       );
-      const action = frame.locator('[data-code="Space"]');
+      const action = frame.locator('[data-control="action"]');
       await direction.scrollIntoViewIfNeeded();
       const d = await direction.boundingBox();
       const a = await action.boundingBox();
       const session = await context.newCDPSession(mobile);
+      const pressTick = await frame.evaluate(
+        async () => window.hostedPlayer.runtime.getSnapshot().ticks,
+      );
       await session.send("Input.dispatchTouchEvent", {
         type: "touchStart",
         touchPoints: [{ x: d.x + d.width / 2, y: d.y + d.height / 2, id: 1 }],
       });
       await frame.waitForFunction(
-        () => document.querySelectorAll(".touch-key.pressed").length === 1,
+        () =>
+          window.hostedPlayer.element.shadowRoot.querySelectorAll(".touch-key.pressed").length ===
+          1,
       );
       await frame.waitForFunction(
-        (tick) => globalThis.playerStatus.ticks > tick + 25,
-        initial.ticks,
+        (tick) => window.hostedPlayer.runtime.getSnapshot().ticks > tick + 25,
+        pressTick,
       );
-      const after = await frame.evaluate(() => ({
+      const after = await frame.evaluate(async () => ({
         spawnPixels: Array.from(
-          document.querySelector("#canvas").getContext("2d").getImageData(80, 88, 16, 16).data,
+          window.hostedPlayer.element.shadowRoot
+            .querySelector("canvas")
+            .getContext("2d")
+            .getImageData(80, 88, 16, 16).data,
         ),
-        hash: globalThis.playerStatus.hash,
+        hash: window.hostedPlayer.runtime.getSnapshot().hash,
       }));
       assert.notEqual(after.hash, initial.hash, "Touch input changes rendered gameplay");
       if (game.id === "mossglen") {
@@ -176,7 +194,9 @@ try {
         ],
       });
       await frame.waitForFunction(
-        () => document.querySelectorAll(".touch-key.pressed").length === 2,
+        () =>
+          window.hostedPlayer.element.shadowRoot.querySelectorAll(".touch-key.pressed").length ===
+          2,
       );
       await session.send("Input.dispatchTouchEvent", { type: "touchCancel", touchPoints: [] });
       assert.equal(
@@ -203,7 +223,10 @@ try {
     await mobile.screenshot({ path: resolve(artifacts, `${game.id}-mobile.png`), fullPage: true });
     await mobile.locator("#restart").click();
     const restarted = await (await mobile.locator("iframe").elementHandle()).contentFrame();
-    await restarted.waitForFunction(() => globalThis.playerStatus?.ready, null, { timeout: 60000 });
+    await bindPlayer(restarted);
+    await restarted.waitForFunction(() => window.hostedPlayer.runtime.getSnapshot().ready, null, {
+      timeout: 60000,
+    });
   }
   assert.deepEqual(errors, [], "No page script errors");
   report.status = "passed";

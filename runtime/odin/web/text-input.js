@@ -38,10 +38,11 @@ function selectionPrefix(value, offset) {
 // One real text input owns browser editing, selection and IME. The cartridge
 // still draws its field; this transparent surface supplies native input only.
 export function createTextInputOverlay({ canvas, logicalSize, send, onEditing = () => {} }) {
+  const document = canvas.ownerDocument;
   let field = null;
   let input = null;
   let destroyed = false;
-  const editing = () => !!input && document.activeElement === input;
+  const editing = () => !!input && input.getRootNode().activeElement === input;
   function reposition() {
     if (!field || !input) {
       return;

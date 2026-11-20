@@ -5,7 +5,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { relative, resolve } from "node:path";
 import { chromium } from "../../../tools/browser-timing.mjs";
 import { serve } from "../../../tools/serve.mjs";
-import { run } from "../../../tools/toolchain.mjs";
+import { run, nativePlayer } from "../../../tools/toolchain.mjs";
 
 // A small rigid, rotating textured model isolates material batch overhead. It
 // is a renderer proxy, not the future playable racing showcase or a frame cap.
@@ -42,7 +42,7 @@ try {
         const url = `http://127.0.0.1:${server.address().port}${web}/player.html`;
         await page.goto(url);
         const native = JSON.parse(
-          run(resolve(base, "native/player.exe"), [
+          run(resolve(base, `native/${nativePlayer}`), [
             "--benchmark",
             inputs,
             "--game",
@@ -111,7 +111,7 @@ try {
           language,
           ssaa,
           cartridge: await digest(game),
-          nativePlayer: await digest(resolve(base, "native/player.exe")),
+          nativePlayer: await digest(resolve(base, `native/${nativePlayer}`)),
           browserRuntime: await digest(resolve(base, "web/runtime-gpu.wasm")),
           browserDevice: await digest(resolve(base, "web/gpu.js")),
           native,

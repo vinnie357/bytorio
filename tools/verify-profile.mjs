@@ -1,3 +1,4 @@
+import { nativePlayer } from "./toolchain.mjs";
 import assert from "node:assert/strict";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { resolve, relative } from "node:path";
@@ -6,11 +7,12 @@ import { spawnSync } from "node:child_process";
 import { once } from "node:events";
 import { chromium } from "./browser-timing.mjs";
 import { buildResourceExamples } from "../examples/resources/tools/build.mjs";
-import { manifest } from "./sdk/project.mjs";
+import { manifest, requireNativePlayer } from "./sdk/project.mjs";
 import { chunks, chunk } from "./sdk/cartridge.mjs";
 import { negotiateProfile } from "../runtime/odin/web/policy.js";
 import { resourceSchema, RESOURCE_EXPORTS } from "../runtime/odin/web/constants.js";
 import { serve } from "./serve.mjs";
+requireNativePlayer();
 
 const root = resolve("build/profile-verification", randomUUID());
 await mkdir(root, { recursive: true });
@@ -27,6 +29,7 @@ assert.deepEqual(
   [advertised.sdkWord, advertised.abi, advertised.protocol, advertised.features],
 );
 assert.equal(profile.targets.guestMemoryBytes, contract.limits.guestMemoryBytes);
+assert.equal(profile.targets.luauMemoryBytes, contract.limits.luauMemoryBytes);
 assert.equal(profile.targets.luauHeapBytes, contract.limits.luauHeapBytes);
 for (const [target, constant] of Object.entries({
   resourceSlots: "maxSlots",
@@ -83,7 +86,7 @@ const env = {
   SDL_RENDER_DRIVER: "software",
 };
 function native(project, args, status = 0) {
-  const result = spawnSync(resolve(project, "build/native/player.exe"), args, {
+  const result = spawnSync(resolve(project, "build/native", nativePlayer), args, {
     env,
     encoding: "utf8",
     timeout: 30000,
@@ -214,7 +217,7 @@ try {
       );
       const source =
         language === "luau" ? await readFile(resolve(project, "build/native/game.luau")) : null;
-      await page.goto(`${web}/player.html?smoke`);
+      await page.goto(`${web}/debug.html?smoke`);
       await page.waitForFunction(() => playerStatus.ready || playerStatus.error);
       for (const query of [
         "game_required_features",
@@ -235,7 +238,9 @@ try {
           async ({ code, source }) => {
             const policy = await import("./policy.js");
             try {
-              const module = policy.inspectGuest(new Uint8Array(code));
+              const module = policy.inspectGuest(new Uint8Array(code), undefined, {
+                luauExecutor: !!source,
+              });
               const game = (
                 await WebAssembly.instantiate(module, {
                   env: {
@@ -323,7 +328,7 @@ try {
     const nativeLoose = JSON.parse(native(project, [...loose, "--smoke"]).stdout);
     assert.equal(nativePng.hash, nativeLoose.hash);
     if (demo === "synthesis") {
-      const unavailable = spawnSync(resolve(project, "build/native/player.exe"), ["--smoke"], {
+      const unavailable = spawnSync(resolve(project, "build/native", nativePlayer), ["--smoke"], {
         env: { ...env, SDL_AUDIODRIVER: "unavailable-profile-test" },
         encoding: "utf8",
         timeout: 30000,
@@ -339,7 +344,7 @@ try {
           }
         };
       });
-      await devicePage.goto(`${web}/player.html?game=./game.png&smoke`);
+      await devicePage.goto(`${web}/debug.html?game=./game.png&smoke`);
       await devicePage.waitForFunction(() => playerStatus.ready || playerStatus.error);
       assert.equal(await devicePage.evaluate(() => playerStatus.error), "");
       await devicePage.locator("#start").click();
@@ -399,7 +404,7 @@ try {
           .locator("#cartridge")
           .setInputFiles({ name: "warm.png", mimeType: "image/png", buffer: png });
       } else {
-        await page.goto(`${web}/player.html?game=./${game}&smoke`);
+        await page.goto(`${web}/debug.html?game=./${game}&smoke`);
       }
       await page.waitForFunction(() => playerStatus.ready || playerStatus.error);
       assert.equal(await page.evaluate(() => playerStatus.error), "");

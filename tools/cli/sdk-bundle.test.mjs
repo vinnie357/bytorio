@@ -7,6 +7,7 @@ import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { gzipSync, gunzipSync } from "node:zlib";
 import { checkVersion, digest, resolveSdk } from "./sdk-bundle.ts";
+import { hostPlatform } from "../host-platform.mjs";
 
 const version = "0.1.0-preview.1";
 const fixtureRoot = resolve("build/sdk-release", version);
@@ -70,7 +71,7 @@ test("versioned releases, offline compiled scaffolding, integrity and failed dow
     for (const language of ["odin", "luau"]) {
       const project = resolve(temporary, `${language} game`);
       const result = spawnSync(
-        resolve("build/cli/byt.exe"),
+        resolve("build/cli", hostPlatform().executable),
         ["new", project, "--language", language, "--sdk", version, "--offline"],
         {
           cwd: temporary,

@@ -16,6 +16,7 @@ import { dirname, join, matchesGlob, relative, resolve } from "node:path";
 import { test } from "node:test";
 import { pathToFileURL } from "node:url";
 import { stagePlayerSupport } from "./player-export.mjs";
+import { windowsHost } from "./toolchain.mjs";
 import { repo } from "./toolchain.mjs";
 
 const mise = process.env.MISE_BIN || "mise";
@@ -32,7 +33,8 @@ const tasks = JSON.parse(execute(["tasks", "ls", "--json"]))
   .filter(
     ({ name }) =>
       name === "build:odin" ||
-      name === "deps:vorbis" ||
+      name.startsWith("deps:vorbis") ||
+      name.startsWith("deps:sdl3") ||
       name.startsWith("deps:player:") ||
       name.startsWith("deps:trace:"),
   );
@@ -148,7 +150,7 @@ function fixture() {
         mkdirSync(dirname(resolve(root, file)), { recursive: true });
       }
       const commands = task.outputs.map((file) => `echo fixture > "${file}"`);
-      if (task.name === "deps:vorbis") {
+      if (task.name.startsWith("deps:vorbis")) {
         // Give concurrently scheduled outer and nested graphs time to observe
         // a stale decoder, as happens with a real compiler on hosted runners.
         commands.unshift('node -e "setTimeout(() => {}, 200)"');
@@ -167,19 +169,19 @@ function fixture() {
   // build artifacts are used by this scheduler regression test.
   for (const file of [
     ".mise/toolchain.toml",
-    "runtime/odin/web/player.js",
+    "runtime/odin/web/debug-player.js",
     "runtime/odin/web/constants.js",
     "runtime/odin/web/main.odin",
     "runtime/odin/resources/resources.odin",
-    "runtime/odin/native/main_windows.odin",
+    "runtime/odin/native/main.odin",
     "runtime/odin/gpu/mesh.frag",
     "runtime/odin/abi/abi.odin",
     "tests/odin/fixtures/main.odin",
     "examples/hello/odin/main.odin",
     "tests/3d/renderer_test.odin",
-    "tests/resources/player/main_windows.odin",
-    "tests/graphics/player/main_windows.odin",
-    "tests/audio/player/main_windows.odin",
+    "tests/resources/player/main.odin",
+    "tests/graphics/player/main.odin",
+    "tests/audio/player/main.odin",
   ]) {
     put(root, file, "fixture\n");
   }
@@ -221,7 +223,7 @@ test("mise rebuilds only the artifacts affected by edits and missing outputs", a
     appendFileSync(resolve(root, file), "\n# changed\n");
     assert.deepEqual(run(...targets), expected.sort(), file);
   }
-  await edit("runtime/odin/web/player.js", ["deps:player:web-support"]);
+  await edit("runtime/odin/web/debug-player.js", ["deps:player:web-support"]);
   await edit("tests/3d/renderer_test.odin", []);
   await edit("mise.toml", []);
   await edit("runtime/odin/gpu/mesh.frag", [
@@ -231,12 +233,12 @@ test("mise rebuilds only the artifacts affected by edits and missing outputs", a
   await edit("tests/odin/fixtures/main.odin", ["deps:player:fixtures"]);
   await edit("examples/hello/odin/main.odin", ["deps:player:hello"]);
   await edit("runtime/odin/web/main.odin", ["deps:player:web-cpu", "deps:player:web-gpu"]);
-  await edit("runtime/odin/native/main_windows.odin", ["deps:player:native-binary"]);
+  await edit("runtime/odin/native/main.odin", ["deps:player:native-binary"]);
   put(root, "runtime/odin/web/new_module.odin", "package web\n");
   assert.deepEqual(run(...targets), ["deps:player:web-cpu", "deps:player:web-gpu"]);
   unlinkSync(resolve(root, "runtime/odin/web/new_module.odin"));
   assert.deepEqual(run(...targets), ["deps:player:web-cpu", "deps:player:web-gpu"]);
-  await edit("tests/graphics/player/main_windows.odin", ["deps:trace:graphics"]);
+  await edit("tests/graphics/player/main.odin", ["deps:trace:graphics"]);
   await edit("runtime/odin/resources/resources.odin", [
     "deps:player:web-cpu",
     "deps:player:web-gpu",
@@ -260,8 +262,19 @@ test("mise rebuilds only the artifacts affected by edits and missing outputs", a
             "deps:trace:graphics",
             "deps:trace:resources",
             name,
+            "deps:vorbis:native",
           ]
-        : [name];
+        : name === "deps:vorbis:native"
+          ? [
+              "deps:player:native-binary",
+              "deps:trace:audio",
+              "deps:trace:graphics",
+              "deps:trace:resources",
+              name,
+            ]
+          : name === "deps:sdl3:native"
+            ? ["deps:player:native-binary", "deps:player:native-support", name]
+            : [name];
     assert.deepEqual(run(...targets), rebuilt, `recover missing ${missing} through aggregate`);
     for (const file of files) {
       assert.ok(existsSync(resolve(root, file)));
@@ -283,6 +296,9 @@ test("support task outputs cover every staged file", async () => {
   ]) {
     put(compilerRoot, file, "fixture");
   }
+  const sdlRoot = resolve(root, "sdl3");
+  put(sdlRoot, "install/lib/libSDL3.0.dylib", "fixture");
+  put(sdlRoot, "SDL3-3.4.2/LICENSE.txt", "fixture");
   put(dependency, "wasmtime.dll", "fixture");
   put(dependency, "../LICENSE", "fixture");
   function files(directory, prefix = "") {
@@ -293,12 +309,13 @@ test("support task outputs cover every staged file", async () => {
   }
   for (const platform of ["web", "native"]) {
     const target = resolve(root, platform);
-    await stagePlayerSupport({ platform, target, compilerRoot, dependency });
+    await stagePlayerSupport({ platform, target, compilerRoot, dependency, sdlRoot });
     const declared = byName
       .get(`deps:player:${platform}-support`)
       .outputs.map((file) => file.replace(`build/odin-player/${platform}/`, ""))
       .sort();
-    assert.deepEqual(files(target).sort(), declared, platform);
+    // Hosts without a Wasmtime DLL repeat a staged file; the set is what matters.
+    assert.deepEqual(files(target).sort(), [...new Set(declared)], platform);
   }
 });
 
@@ -312,12 +329,18 @@ test("copied support with old source timestamps becomes current in mise", async 
     "compiler/vendor/OpenGL/LICENSE_glad": "glad license",
     "dependency/lib/wasmtime.dll": "runtime binary",
     "dependency/LICENSE": "runtime license",
+    "sdl3/install/lib/libSDL3.0.dylib": "SDL dylib",
+    "sdl3/SDL3-3.4.2/LICENSE.txt": "SDL license",
   };
   const old = new Date("2000-01-01T00:00:00Z");
   for (const [file, content] of Object.entries(sources)) {
     put(root, `inputs/${file}`, content);
     utimesSync(resolve(root, `inputs/${file}`), old, old);
   }
+  // The library whose edits must restage: the Wasmtime DLL on Windows, the SDL3 dylib elsewhere.
+  const [library, libraryInput, libraryText] = windowsHost
+    ? ["wasmtime.dll", "dependency/lib/wasmtime.dll", "runtime binary"]
+    : ["libSDL3.0.dylib", "sdl3/install/lib/libSDL3.0.dylib", "SDL dylib"];
   const outputs = byName.get("deps:player:native-support").outputs;
   const helper = pathToFileURL(resolve(repo, "tools/player-export.mjs")).href;
   put(
@@ -332,6 +355,7 @@ await stagePlayerSupport({
   target: resolve("build/odin-player/native"),
   compilerRoot: resolve("inputs/compiler"),
   dependency: resolve("inputs/dependency/lib"),
+  sdlRoot: resolve("inputs/sdl3"),
 });
 appendFileSync("executions.txt", "staged\\n");
 `,
@@ -356,16 +380,16 @@ ${inventory}run = [{ task = "stage" }]
   }
   assert.equal(run(), 1);
   assert.equal(
-    readFileSync(resolve(root, "build/odin-player/native/wasmtime.dll"), "utf8"),
-    "runtime binary",
+    readFileSync(resolve(root, `build/odin-player/native/${library}`), "utf8"),
+    libraryText,
   );
   assert.equal(run(), 1, "unchanged copied outputs must not be staged again");
 
   await new Promise((done) => setTimeout(done, 20));
-  put(root, "inputs/dependency/lib/wasmtime.dll", "updated binary");
+  put(root, `inputs/${libraryInput}`, "updated binary");
   assert.equal(run(), 2, "real source edits still invalidate staging");
   assert.equal(
-    readFileSync(resolve(root, "build/odin-player/native/wasmtime.dll"), "utf8"),
+    readFileSync(resolve(root, `build/odin-player/native/${library}`), "utf8"),
     "updated binary",
   );
   unlinkSync(resolve(root, outputs.at(-1)));

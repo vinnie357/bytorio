@@ -18,10 +18,11 @@ byt pack my-game
 byt pack my-game --output dist/my-game.png --cover art/cover.png
 ```
 
-`build`, `run` and `watch` also produce `build/game.png`, with identical copies
-in `build/native` and `build/web`. Without custom art, packaging creates a 256×256
+`build`, `run` and `dev` also produce `build/game.png`. Plain build exports web;
+`--target native` or `--target all` selects native output explicitly. Each selected
+player folder includes its cartridge. Without custom art, packaging creates a 256×256
 cover from the title, first sprite, palette and bitmap font. An optional `cover`
-path in `console.json` selects project-relative PNG artwork; `pack --cover`
+path in `bytorio.toml` selects project-relative PNG artwork; `pack --cover`
 overrides it. Custom covers retain their original image chunks. The packer rejects
 an existing cartridge as cover art rather than nesting another game.
 
@@ -54,7 +55,7 @@ big-endian chunk lengths and CRC-32 follow the
 [W3C PNG specification](https://www.w3.org/TR/png-3/#5Chunk-layout).
 The game payload is not stored in pixel colors or appended after `IEND`.
 
-The implemented preview accepts a **2 MiB** base PNG plus an optional **512 MiB**
+The current player accepts a **10 MiB** base PNG plus an optional **512 MiB**
 indexed-content payload and its 12-byte PNG chunk envelope, covers from 1×1 through
 1024×1024, at most 4,096 chunks, and a single static image. Standard grayscale,
 RGB, indexed and alpha PNG header encodings are accepted. The cartridge parser
@@ -91,11 +92,26 @@ payload are **little-endian**, independently of the surrounding PNG envelope.
 
 Exactly the title bytes, then code bytes, follow the header. No padding, extra
 entries, external paths or optional executor are allowed. The title is valid
-UTF-8 without ASCII controls or DEL. Luau code is UTF-8, at most 256 KiB. Odin code
-is a Wasm version-1 module, at most 1 MiB. Neither code section is compressed.
+UTF-8 without ASCII controls or DEL. Luau code is UTF-8, at most 8 MiB. Odin code
+is a Wasm version-1 module, at most 8 MiB. Neither code section is compressed.
 Sprites and fonts are already embedded by the SDK. Both players check the
 cartridge SDK/ABI/profile before initialization and initial display afterward, and retain the
 existing guest memory, ABI, drawing, execution and diagnostic checks.
+
+The module-size budget includes compiled code and embedded data; it is separate
+from Odin's 8 MiB guest linear-memory maximum. The 10 MiB base PNG allowance includes
+the cover, code and metadata. Larger modules can increase loading time and host
+compilation memory without increasing guest memory or execution allowances.
+Luau's 8 MiB allowance measures the complete bundled source, including SDK code,
+wrappers and embedded graphics. Its executor starts with 4 MiB of linear memory
+and allocates only the needed source buffer, growing up to a separate 64 MiB
+ceiling for source, compiler and VM storage. The tracked Luau VM heap remains
+capped at 4 MiB. Source size alone does not guarantee a game fits its heap or
+execution budget. Native fuel and browser watchdog limits are unchanged.
+The container and guest ABI are unchanged. Players with the earlier 1 MiB module
+limit, 256 KiB Luau source limit and 2 MiB base PNG limit still load older cartridges, but reject files exceeding
+those limits. Rebuild and distribute the updated native/browser player alongside
+a larger cartridge.
 
 Unsupported container, profile, SDK, ABI, language or flags fail explicitly.
 These preview limits do not implement the proposed 128/512 MB full-ROM profile;

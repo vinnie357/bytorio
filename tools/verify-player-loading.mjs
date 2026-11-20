@@ -59,7 +59,7 @@ const server = createServer(async (request, response) => {
     return;
   }
   try {
-    const name = pathname.slice(1) || "player.html";
+    const name = pathname.slice(1) || "debug.html";
     const file = resolve(builtRoot, name);
     assert(file.startsWith(builtRoot + sep));
     const bytes = sources.get(name) || (await readFile(file));
@@ -79,7 +79,7 @@ await once(server, "listening");
 const report = {
   status: "running",
   sourceHashes: Object.fromEntries(
-    ["player.js", "worker.js", "cartridge.js"].map((name) => [
+    ["debug-player.js", "session.js", "worker.js", "cartridge.js"].map((name) => [
       name,
       createHash("sha256").update(sources.get(name)).digest("hex"),
     ]),
@@ -109,7 +109,7 @@ try {
       try {
         if (name === "local") {
           await page.goto(
-            `http://127.0.0.1:${server.address().port}/player.html?local&game=local-must-not-fetch.png`,
+            `http://127.0.0.1:${server.address().port}/debug.html?local&game=local-must-not-fetch.png`,
           );
           await page.waitForFunction(() => !!globalThis.playerStatus);
           await page.locator("#graphics-apply").click();
@@ -136,7 +136,7 @@ try {
           await page.screenshot({ path: resolve(root, "local.png") });
           return;
         }
-        await page.goto(`http://127.0.0.1:${server.address().port}/player.html?game=${name}.png`);
+        await page.goto(`http://127.0.0.1:${server.address().port}/debug.html?game=${name}.png`);
         await page.waitForFunction(
           () => globalThis.playerStatus?.ready || globalThis.playerStatus?.error,
           null,

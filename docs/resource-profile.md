@@ -77,7 +77,7 @@ and waveform controls. Their checked-in sources live under
 New CLI projects request SDK 0.2.0 and `profile: "resource-av-1"`. Existing
 `sdk: "0.1.0"` manifests remain supported. Declaring a contradictory profile is
 an error. `build` and `pack` produce the same self-contained PNG on both hosts.
-The PNG container remains version 1 with its 32-byte header and **2 MiB** base
+The PNG container remains version 1 with its 32-byte header and **10 MiB** base
 envelope limit; optional [indexed content](indexed-content.md) has a separate
 capacity bound. Distributions include `profile.json`,
 the public profile and wire schema alongside their player, licenses and modules.
@@ -104,15 +104,17 @@ it does not prove physical GPU/device-loss recovery.
 
 `mise run test` also runs SDK, PNG malformed-input, registry, graphics, PCM,
 synthesis/full-graph, display and ABI 1 RPG/racing regression suites. These
-exercise all four language/host combinations in Windows CI. Registry tests
+exercise both languages on native and browser hosts in Windows and Apple Silicon
+macOS CI. Registry tests
 cover invalid/stale handles, atomic rollback, budget/allocation failure and
 teardown; audio tests cover bounded queues, stalls, epochs and reload. PNG tests
 also remove loose game files to prove that packaged assets are self-contained.
 
-Supported development/runtime reference: Windows x64 with SDL3/Wasmtime;
+Supported development/runtime references: Windows x64 and macOS Apple Silicon
+with SDL3/Wasmtime;
 browser reference: Chromium with WebAssembly, Workers, Canvas2D and AudioWorklet,
-without shared memory or isolation headers. Native macOS/Linux and other browser
-engines are not certified by this suite. Canvas loss stops the worker and audio;
+without shared memory or isolation headers. Native Linux, Intel Mac players and
+other browser engines are not certified by this suite. Canvas loss stops the worker and audio;
 the user restarts into a new session after restoration. Allocation failure is a
 load/commit error, never permission to reduce limits silently.
 

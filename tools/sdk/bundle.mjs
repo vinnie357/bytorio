@@ -1,9 +1,11 @@
 import { readFile, realpath, stat } from "node:fs/promises";
 import { resolve, dirname, relative, sep } from "node:path";
-import { formatSource } from "../code-tools.mjs";
-import { PROFILE_ALPHA_3D, PROFILE_OGG } from "../../runtime/odin/web/constants.js";
-
-const contract = JSON.parse(await readFile(new URL("../../sdk/contract.json", import.meta.url)));
+import contract from "../../sdk/contract.json" with { type: "json" };
+import {
+  PROFILE_ALPHA_3D,
+  PROFILE_OGG,
+  MAX_LUAU_SOURCE_BYTES,
+} from "../../runtime/odin/web/constants.js";
 
 // Optional SDK modules are loaded inside helpers, never during SDK initialization.
 // Older profiles keep their source budget and fail explicitly if a new helper is called.
@@ -156,7 +158,7 @@ export async function bundleLuau({
     }
     visiting.add(id);
     const source = await readFile(file, "utf8");
-    if (Buffer.byteLength(source) > 256 * 1024 || modules.size + visiting.size > 256) {
+    if (Buffer.byteLength(source) > MAX_LUAU_SOURCE_BYTES || modules.size + visiting.size > 256) {
       throw new Error("Luau module graph exceeds preview limits");
     }
     const lex = tokens(source),
@@ -200,21 +202,36 @@ export async function bundleLuau({
   const sdkId = await visit(sdkEntry),
     mainId = await visit(entry);
   const output = [
-    `-- SDK bundled cartridge. Generated; edit project sources instead.\nlocal __native=console\nlocal __modules,__cache={},{}\nlocal function __require(id:string):any\n    if id=="$native" then return __native end\n    if __cache[id]~=nil then return __cache[id] end\n    local value=__modules[id]()\n    assert(value~=nil,"module must return a value")\n    __cache[id]=value;return value\nend`,
+    `-- SDK bundled cartridge. Generated; edit project sources instead.
+local __native = console
+local __modules, __cache = {}, {}
+local function __require(id: string): any
+    if id == "$native" then
+        return __native
+    end
+    if __cache[id] ~= nil then
+        return __cache[id]
+    end
+    local value = __modules[id]()
+    assert(value ~= nil, "module must return a value")
+    __cache[id] = value
+    return value
+end`,
   ];
   for (const [id, source] of modules) {
-    output.push(`__modules[${JSON.stringify(id)}]=function()\n${source}\nend`);
+    output.push(`__modules[${JSON.stringify(id)}] = function()\n${source}\nend`);
   }
   output.push(
-    `local __sdk=__require(${JSON.stringify(sdkId)})\n__sdk.assets(${JSON.stringify(assets.toString("base64"))})\nreturn __sdk._wrap(__require(${JSON.stringify(mainId)}),${display[0]},${display[1]})\n`,
+    `local __sdk = __require(${JSON.stringify(sdkId)})\n__sdk.assets(${JSON.stringify(assets.toString("base64"))})\nreturn __sdk._wrap(__require(${JSON.stringify(mainId)}), ${display[0]}, ${display[1]})\n`,
   );
   const bytes = Buffer.from(
-    (profile !== 1 ? `--!console-profile=${profile}\n` : "") +
-      formatSource(output.join("\n"), "game.luau"),
+    (profile !== 1 ? `--!console-profile=${profile}\n` : "") + output.join("\n"),
     "utf8",
   );
-  if (bytes.length > 256 * 1024) {
-    throw new Error(`Bundled Luau source exceeds 256 KiB (${bytes.length} bytes)`);
+  if (bytes.length > MAX_LUAU_SOURCE_BYTES) {
+    throw new Error(
+      `Bundled Luau source exceeds size limit (${bytes.length} > ${MAX_LUAU_SOURCE_BYTES} bytes)`,
+    );
   }
   return bytes;
 }
@@ -222,8 +239,34 @@ export function odinEntry({ graphicsImport = '"assets"', display = "High" } = {}
   if (!["High", "Low"].includes(display)) {
     throw new Error("Invalid display mode");
   }
-  return formatSource(
-    `// Generated SDK entry point.\npackage main\nimport "base:runtime"\nimport byt "sdk:bytorio"\nimport ${graphicsImport}\n@(export) game_init :: proc "c" () {\n context=runtime.default_context()\n byt.start(byt.Callbacks{init=init,update=update,draw=draw},byt.Config{graphics=assets.raster[:],display=.${display}})\n}\n`,
-    "bytorio_entry.odin",
-  );
+  return `// Generated SDK entry point.
+package main
+import ${graphicsImport}
+import "base:runtime"
+import byt "sdk:bytorio"
+@(export)
+game_init :: proc "c" () {
+    context = runtime.default_context()
+    byt.start(
+        byt.Callbacks{init = init, update = update, draw = draw},
+        byt.Config{graphics = assets.raster[:], display = .${display}},
+    )
+}
+`;
+}
+
+export function odinGraphics({ packet, palette }) {
+  const valuesPerLine = 32;
+  const rows = [];
+  for (let offset = 0; offset < packet.length; offset += valuesPerLine) {
+    rows.push(`    ${[...packet.subarray(offset, offset + valuesPerLine)].join(", ")},`);
+  }
+  return `package assets
+
+raster := [${packet.length}]u8{
+${rows.join("\n")}
+}
+
+palette := [${palette.length}]u32{${palette.join(", ")}}
+`;
 }

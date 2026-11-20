@@ -2,11 +2,19 @@ import assert from "node:assert/strict";
 import { mkdir, readFile, writeFile, copyFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { once } from "node:events";
-import { createProject, buildProject } from "./sdk/project.mjs";
-import { tool, run, task, dependencyRoot } from "./toolchain.mjs";
+import { createProject, buildProject, requireNativePlayer } from "./sdk/project.mjs";
+import {
+  tool,
+  run,
+  task,
+  dependencyRoot,
+  copyWasmtimeLibrary,
+  nativePlayer,
+} from "./toolchain.mjs";
 import { chromium } from "./browser-timing.mjs";
 import { serve } from "./serve.mjs";
 import { odinUnitTests } from "./odin-unit-tests.mjs";
+requireNativePlayer();
 
 const root = resolve("build/ogg-verification");
 await mkdir(root, { recursive: true });
@@ -22,7 +30,7 @@ run(tool("odin"), [
   `-collection:deps=${dependencyRoot()}`,
   `-out:${resolve(root, "trace.exe")}`,
 ]);
-await copyFile(resolve(dependencyRoot(), "wasmtime.dll"), resolve(root, "wasmtime.dll"));
+await copyWasmtimeLibrary(root);
 const referenceBytes = await readFile("tests/ogg/fixtures/reference.f32");
 const reference = new Float32Array(
   referenceBytes.buffer,
@@ -94,7 +102,7 @@ try {
     assert.equal(native.completed, 1);
     assert.ok(native.resourceBytes < 64 * 1024 * 1024);
     const device = JSON.parse(
-      run(resolve(project, "build/native/player.exe"), ["--smoke"], {
+      run(resolve(project, "build/native", nativePlayer), ["--smoke"], {
         env: {
           ...process.env,
           SDL_VIDEODRIVER: "dummy",
@@ -152,7 +160,7 @@ try {
         parityError,
         decoderMemoryBytes: result.memoryBytes,
       };
-      await page.goto(`${origin}/player.html`);
+      await page.goto(`${origin}/debug.html`);
       await page.waitForFunction(() => playerStatus.ready || playerStatus.error);
       assert.equal(await page.evaluate(() => playerStatus.error), "");
       await page.click("#start");

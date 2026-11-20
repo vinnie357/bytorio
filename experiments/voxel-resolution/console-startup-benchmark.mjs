@@ -2,11 +2,20 @@ import assert from "node:assert/strict";
 import { once } from "node:events";
 import { createHash } from "node:crypto";
 import { cpus } from "node:os";
-import { mkdir, readdir, readFile, writeFile, copyFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { chromium } from "playwright";
 import { serve } from "../../tools/serve.mjs";
-import { run, tool, repo, dependencyRoot } from "../../tools/toolchain.mjs";
+import {
+  run,
+  tool,
+  repo,
+  dependencyRoot,
+  nativePlayer,
+  nativeLinkerFlags,
+  copySdlLibrary,
+  copyWasmtimeLibrary,
+} from "../../tools/toolchain.mjs";
 
 const folder = resolve("build/riverside-startup");
 const sceneRoot = resolve("build/compact-3d/riverside");
@@ -65,7 +74,7 @@ try {
       }
       let source = await readFile(resolve("runtime/odin/native", name), "utf8");
       source = source.replaceAll('"../', '"console_runtime:');
-      if (name === "main_windows.odin") {
+      if (name === "main.odin") {
         const replace = (before, after) => {
           assert(source.includes(before), `missing native probe anchor: ${before}`);
           source = source.replace(before, after);
@@ -92,7 +101,7 @@ try {
       }
       await writeFile(resolve(sourceFolder, name), source);
     }
-    const exe = resolve(binaryFolder, "player.exe");
+    const exe = resolve(binaryFolder, nativePlayer);
     console.log("Building instrumented native startup observer.");
     run(
       tool("odin"),
@@ -104,15 +113,15 @@ try {
         `-out:${exe}`,
         `-collection:console_runtime=${resolve(repo, "runtime/odin")}`,
         `-collection:deps=${dependencyRoot()}`,
+        ...nativeLinkerFlags({ harness: true }),
       ],
       { timeout: 180000 },
     );
-    for (const name of ["wasmtime.dll", "SDL3.dll"]) {
-      await copyFile(resolve(sceneRoot, "odin/build/native", name), resolve(binaryFolder, name));
-    }
+    await copySdlLibrary(binaryFolder);
+    await copyWasmtimeLibrary(binaryFolder);
     report.nativeObserver = {
       sha256: await hash(exe),
-      sourcePlayerSha256: await hash(resolve(sceneRoot, "odin/build/native/player.exe")),
+      sourcePlayerSha256: await hash(resolve(sceneRoot, `odin/build/native/${nativePlayer}`)),
     };
     for (const language of ["odin", "luau"]) {
       for (const backend of ["cpu", "gpu"]) {
@@ -172,7 +181,7 @@ try {
     );
     assert.equal(
       previous.nativeObserver.sourcePlayerSha256,
-      await hash(resolve(sceneRoot, "odin/build/native/player.exe")),
+      await hash(resolve(sceneRoot, `odin/build/native/${nativePlayer}`)),
     );
     report.native = previous.native;
     report.nativeObserver = previous.nativeObserver;
@@ -188,7 +197,7 @@ try {
       if (backend === "gpu") {
         args.push("--gpu-meshes", "--ssaa", "1080p", "--smooth-pan");
       }
-      const output = run(resolve(sceneRoot, language, "build/native/player.exe"), args);
+      const output = run(resolve(sceneRoot, language, `build/native/${nativePlayer}`), args);
       const last = JSON.parse(output.trim().split("\n").at(-1));
       const observed = report.native.find(
         (record) => record.language === language && record.backend === backend,
@@ -286,7 +295,7 @@ try {
               backend === "gpu"
                 ? "renderer=gpu&gpu-meshes&ssaa=1080p&smooth-pan"
                 : "renderer=cpu&ssaa=off";
-            const url = `${origin}/build/compact-3d/riverside/${language}/build/web/player.html?${query}`;
+            const url = `${origin}/build/compact-3d/riverside/${language}/build/web/debug.html?${query}`;
             if (cache !== "fresh-context") {
               await measure(page, url);
             }

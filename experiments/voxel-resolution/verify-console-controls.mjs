@@ -4,7 +4,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { chromium } from "playwright";
 import { serve } from "../../tools/serve.mjs";
-import { run } from "../../tools/toolchain.mjs";
+import { run, nativePlayer } from "../../tools/toolchain.mjs";
 import * as input from "../../runtime/odin/web/constants.js";
 
 const root = resolve("build/compact-3d/riverside");
@@ -18,7 +18,7 @@ try {
   for (const language of ["odin", "luau"]) {
     const base = `/build/compact-3d/riverside/${language}/build/web`;
     const page = await browser.newPage({ viewport: { width: 1280, height: 1000 } });
-    await page.goto(`${origin}${base}/player.html?renderer=gpu&gpu-meshes&ssaa=1080p&smooth-pan`);
+    await page.goto(`${origin}${base}/debug.html?renderer=gpu&gpu-meshes&ssaa=1080p&smooth-pan`);
     const ready = async () => {
       await page.waitForFunction(() => window.playerStatus?.ready || window.playerStatus?.error);
       assert.equal(await page.evaluate(() => window.playerStatus.error), "");
@@ -100,7 +100,7 @@ try {
     const replay = resolve(root, `${language}-controls.inputs`);
     await writeFile(replay, masks.join("\n") + "\n");
     const native = run(
-      resolve(root, `${language}/build/native/player.exe`),
+      resolve(root, `${language}/build/native/${nativePlayer}`),
       ["--replay", replay, "--renderer", "cpu"],
       { timeout: 120000 },
     )
@@ -192,7 +192,7 @@ try {
     assert.deepEqual(web.traces, native, `${language}: exact CPU control replay across hosts`);
     await writeFile(replay, qualityMasks.join("\n") + "\n");
     const nativeQuality = run(
-      resolve(root, `${language}/build/native/player.exe`),
+      resolve(root, `${language}/build/native/${nativePlayer}`),
       ["--replay", replay, "--renderer", "cpu", "--ssaa", "1080p", "--smooth-pan"],
       { timeout: 120000, env: { ...process.env, SDL_VIDEODRIVER: "dummy" } },
     )

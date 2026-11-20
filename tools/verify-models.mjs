@@ -6,7 +6,9 @@ import { relative, resolve } from "node:path";
 import { chromium } from "playwright";
 import { buildModels } from "../examples/models/tools/build.mjs";
 import { serve } from "./serve.mjs";
-import { run } from "./toolchain.mjs";
+import { run, nativePlayer } from "./toolchain.mjs";
+import { requireNativePlayer } from "./sdk/project.mjs";
+requireNativePlayer();
 
 const gpu = process.argv.includes("--gpu");
 const root = resolve("build/model-verification", randomUUID());
@@ -33,7 +35,7 @@ try {
     ...opaqueProjects.map((project) => ({ ...project, variant: "opaque" })),
   ]) {
     const base = "/" + relative(process.cwd(), resolve(project, "build/web")).replaceAll("\\", "/");
-    await page.goto(`http://127.0.0.1:${server.address().port}${base}/player.html`);
+    await page.goto(`http://127.0.0.1:${server.address().port}${base}/debug.html`);
     for (const residentMeshes of gpu ? [false, true] : [false]) {
       const graphics = { backend: gpu ? "gpu" : "cpu", ssaa: "off", residentMeshes };
       for (const [name, masks] of [
@@ -46,7 +48,7 @@ try {
         const inputs = resolve(root, `${name}.inputs`);
         await writeFile(inputs, masks.join("\n"));
         const native = JSON.parse(
-          run(resolve(project, "build/native/player.exe"), [
+          run(resolve(project, "build/native", nativePlayer), [
             "--benchmark",
             inputs,
             "--renderer",
@@ -144,7 +146,7 @@ try {
         }
       }
     }
-    await page.goto(`http://127.0.0.1:${server.address().port}${base}/player.html?game=./game.png`);
+    await page.goto(`http://127.0.0.1:${server.address().port}${base}/debug.html?game=./game.png`);
     await page.waitForFunction(() => window.playerStatus?.ready || window.playerStatus?.error);
     assert.equal(await page.evaluate(() => window.playerStatus.error), "");
     await page.screenshot({ path: resolve(root, `${variant}-${language}.png`) });

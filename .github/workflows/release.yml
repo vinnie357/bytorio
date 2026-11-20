@@ -15,34 +15,166 @@ permissions:
 
 jobs:
   build:
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-latest
+            platform: windows-x64
+            validation: --full
+            tools: ""
+          - runner: macos-15
+            platform: macos-arm64
+            validation: --full
+            tools: ""
+          - runner: macos-15-intel
+            platform: macos-x64
+            validation: test:cli
+            tools: node bun github:DanielGavin/ols stylua
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
     env:
       PLAYER_BROWSER_CHANNEL: chrome
+      MISE_TASK_RUN_AUTO_INSTALL: "false"
       BYTORIO_RELEASE_TAG: ${{ github.ref_name }}
     steps:
       - uses: actions/checkout@v4
       - uses: jdx/mise-action@v4
         with:
           version: 2026.10.15
+          install_args: ${{ matrix.tools }}
       - run: npm ci
       - name: Validate tagged source and binary
-        run: mise run validate
+        run: mise run validate ${{ matrix.validation }}
       - name: Package release assets
+        if: startsWith(github.ref_name, 'byt-v')
         run: mise run package:release
+      - name: Produce SDK host candidate
+        if: startsWith(github.ref_name, 'sdk-v') && matrix.platform != 'macos-x64'
+        run: mise run package:sdk-candidate
       - uses: actions/upload-artifact@v4
+        if: startsWith(github.ref_name, 'sdk-v') && matrix.platform != 'macos-x64'
         with:
-          name: release-assets
+          name: sdk-candidate-${{ matrix.platform }}
+          path: build/sdk-candidates/${{ matrix.platform }}/
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: startsWith(github.ref_name, 'sdk-v')
+        with:
+          name: qualified-cli-${{ matrix.platform }}
+          path: build/cli/
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: startsWith(github.ref_name, 'byt-v')
+        with:
+          name: release-assets-${{ matrix.platform }}
           path: build/releases/${{ github.ref_name }}/
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: release-validation
+          name: release-validation-${{ matrix.platform }}
           path: build/validation/
 
-  publish:
+  intel:
     needs: build
+    if: startsWith(github.ref_name, 'sdk-v')
+    runs-on: macos-15-intel
+    timeout-minutes: 20
+    env:
+      MISE_TASK_RUN_AUTO_INSTALL: "false"
+      BYTORIO_RELEASE_TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v4
+        with:
+          version: 2026.10.15
+          install_args: node cmake ninja
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: sdk-candidate-windows-x64
+          path: build/sdk-candidates/windows-x64/
+      - run: mise run package:sdk-intel
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdk-candidate-macos-x64
+          path: build/sdk-candidates/macos-x64/
+          if-no-files-found: error
+
+  assemble:
+    needs: [build, intel]
+    if: startsWith(github.ref_name, 'sdk-v')
+    runs-on: ubuntu-latest
+    env:
+      BYTORIO_RELEASE_TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: sdk-candidate-*
+          path: build/downloaded-candidates/
+      - name: Arrange and assemble candidates
+        run: node tools/prepare-sdk-assembly.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-assets-sdk
+          path: build/releases/${{ github.ref_name }}/
+          if-no-files-found: error
+
+  qualify:
+    needs: [build, assemble]
+    if: startsWith(github.ref_name, 'sdk-v')
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-latest
+            platform: windows-x64
+          - runner: macos-15
+            platform: macos-arm64
+          - runner: macos-15-intel
+            platform: macos-x64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    env:
+      PLAYER_BROWSER_CHANNEL: chrome
+      MISE_TASK_RUN_AUTO_INSTALL: "false"
+      BYTORIO_SDK_DIRECTORY: ${{ github.workspace }}/build/releases/${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v4
+        with:
+          version: 2026.10.15
+          install_args: node
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: qualified-cli-${{ matrix.platform }}
+          path: build/cli/
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-assets-sdk
+          path: build/releases/${{ github.ref_name }}/
+      - name: Restore executable mode lost by artifact storage
+        if: runner.os == 'macOS'
+        run: chmod +x build/cli/byt
+      - run: mise run validate test:sdk-release
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: assembled-sdk-qualification-${{ matrix.platform }}
+          path: |
+            build/validation/
+            build/sdk-authoring-verification/report.json
+
+  publish:
+    needs: [build, assemble, qualify]
+    if: always() && needs.build.result == 'success' && (startsWith(github.ref_name, 'byt-v') || (needs.assemble.result == 'success' && needs.qualify.result == 'success'))
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -55,9 +187,18 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+      - run: npm ci
       - uses: actions/download-artifact@v4
         with:
-          name: release-assets
+          pattern: release-assets-*
+          merge-multiple: true
           path: build/releases/${{ github.ref_name }}/
       - name: Verify assets and publish release
         run: node tools/publish-release.mjs
+
+  install:
+    needs: publish
+    if: always() && needs.publish.result == 'success' && startsWith(github.ref_name, 'byt-v')
+    uses: ./.github/workflows/cli-install.yml
+    with:
+      version: ${{ github.ref_name }}

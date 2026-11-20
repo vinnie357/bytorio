@@ -1,12 +1,18 @@
 ["deps:luau:configure"]
 description = "Configure the Luau Wasm executor with pinned Emscripten"
-sources = ["experiments/luau-executor/CMakeLists.txt", ".mise/toolchain.toml", ".mise/tasks/deps.toml"]
+sources = ["experiments/luau-executor/CMakeLists.txt", "experiments/luau-dependency.cmake", "sdk/contract.json", ".mise/toolchain.toml", ".mise/tasks/deps.toml"]
 outputs = ["build/luau-executor/CMakeCache.txt", "build/luau-executor/build.ninja", "build/luau-executor/compile_commands.json", "build/luau-executor/_deps/luau-src/LICENSE.txt"]
 run = "emcmake cmake --fresh -S experiments/luau-executor -B build/luau-executor -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DFETCHCONTENT_SOURCE_DIR_LUAU="
 
 ["deps:luau"]
 description = "Build the shared Luau compiler/VM executor"
 depends = ["deps:luau:configure"]
-sources = ["experiments/luau-executor/**/*.cpp", "experiments/luau-executor/**/*.h", "experiments/luau-executor/CMakeLists.txt", ".mise/toolchain.toml", ".mise/tasks/deps.toml"]
+sources = ["experiments/luau-executor/**/*.cpp", "experiments/luau-executor/**/*.h", "experiments/luau-executor/CMakeLists.txt", "experiments/luau-dependency.cmake", ".mise/toolchain.toml", ".mise/tasks/deps.toml"]
 outputs = ["build/luau-executor/luau-executor.wasm"]
 run = "cmake --build build/luau-executor --target luau_executor -j 8"
+
+["deps:luau:analyzer"]
+description = "Build the release producer's native analyzer from the executor's exact Luau revision"
+sources = ["experiments/luau-analyzer/CMakeLists.txt", "experiments/luau-dependency.cmake", ".mise/toolchain.toml", ".mise/tasks/deps.toml"]
+outputs = ["build/luau-analyzer/bin/luau-analyze"]
+run = ["cmake -S experiments/luau-analyzer -B build/luau-analyzer -G Ninja -DCMAKE_BUILD_TYPE=Release", "cmake --build build/luau-analyzer --target Luau.Analyze.CLI -j 3"]

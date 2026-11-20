@@ -9,7 +9,7 @@ import { createProject, buildProject, checkProject } from "./sdk/project.mjs";
 import { bundleLuau } from "./sdk/bundle.mjs";
 import { graphicsPacket } from "./sdk/assets.mjs";
 import { serve } from "./serve.mjs";
-import { tool, run } from "./toolchain.mjs";
+import { nativePlayer, tool, run } from "./toolchain.mjs";
 import {
   loadSource,
   checkExecutor,
@@ -193,14 +193,14 @@ for (const language of ["odin", "luau"]) {
     language === "luau"
       ? ["--game", resolve(base, "luau-executor.wasm"), "--source", resolve(base, "game.luau")]
       : [];
-  const result = spawnSync(resolve(base, "player.exe"), [...flags, "--replay", nativeInputs], {
+  const result = spawnSync(resolve(base, nativePlayer), [...flags, "--replay", nativeInputs], {
     encoding: "utf8",
     timeout: 30000,
     cwd: base,
   });
   assert.equal(result.status, 0, result.stderr);
   assert.deepEqual(result.stdout.trim().split(/\r?\n/).map(JSON.parse), nativeExpected);
-  const smoke = spawnSync(resolve(base, "player.exe"), [...flags, "--smoke"], {
+  const smoke = spawnSync(resolve(base, nativePlayer), [...flags, "--smoke"], {
     encoding: "utf8",
     timeout: 30000,
     cwd: base,
@@ -223,7 +223,7 @@ const browser = await chromium.launch({
 try {
   const page = await browser.newPage();
   for (const language of ["luau", "odin"]) {
-    await page.goto(`http://127.0.0.1:${server.address().port}/${language}/build/web/player.html`);
+    await page.goto(`http://127.0.0.1:${server.address().port}/${language}/build/web/debug.html`);
     await page.waitForFunction(() => playerStatus.ready || playerStatus.error);
     assert.equal(await page.evaluate(() => playerStatus.error), "");
     const frames = await page.evaluate(

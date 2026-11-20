@@ -4,11 +4,12 @@ import { resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { once } from "node:events";
 import { timedSpawnSync as spawnSync } from "./command-timing.mjs";
-import { tool, dependencyRoot } from "./toolchain.mjs";
+import { tool, dependencyRoot, nativeLinkerFlags, nativePlayer } from "./toolchain.mjs";
 import { odinUnitTests } from "./odin-unit-tests.mjs";
-import { createProject, buildProject } from "./sdk/project.mjs";
+import { createProject, buildProject, requireNativePlayer } from "./sdk/project.mjs";
 import { chromium } from "./browser-timing.mjs";
 import { serve } from "./serve.mjs";
+requireNativePlayer();
 
 const root = resolve("build/text-input-verification", randomUUID());
 await mkdir(root, { recursive: true });
@@ -22,6 +23,7 @@ const unit = spawnSync(
     "-o:none",
     `-collection:deps=${dependencyRoot()}`,
     `-out:${nativeTest}`,
+    ...nativeLinkerFlags({ harness: true }),
   ],
   {
     encoding: "utf8",
@@ -41,7 +43,7 @@ for (const language of ["odin", "luau"]) {
   const replay = resolve(project, "inputs.txt");
   await writeFile(replay, "0\n0\n16\n0\n1\n0\n");
   const result = spawnSync(
-    resolve(project, "build/native/player.exe"),
+    resolve(project, "build/native", nativePlayer),
     [resolve(project, "build/game.png"), "--replay", replay],
     { encoding: "utf8", timeout: 30000 },
   );
@@ -67,7 +69,7 @@ const browser = await chromium.launch({
 try {
   for (const language of ["odin", "luau"]) {
     const page = await browser.newPage();
-    await page.goto(`http://127.0.0.1:${server.address().port}/${language}/build/web/player.html`);
+    await page.goto(`http://127.0.0.1:${server.address().port}/${language}/build/web/debug.html`);
     await page.waitForFunction(() => playerStatus.ready || playerStatus.error);
     assert.equal(await page.evaluate(() => playerStatus.error), "");
     await page.locator("#start").click();

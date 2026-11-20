@@ -1,8 +1,32 @@
 ["deps:vorbis"]
-sources = ["runtime/vorbis/**", "tools/vorbis-build.mjs", ".mise/toolchain.toml"]
-outputs = ["build/vorbis/vorbis.js", "build/vorbis/vorbis.wasm", "build/vorbis/native/Release/bytorio-vorbis.lib"]
+sources = ["runtime/vorbis/**", "tools/vorbis-build.mjs", "tools/toolchain.mjs", "tools/host-platform.mjs", "tools/command-timing.mjs", ".mise/toolchain.toml"]
+outputs = [
+  "build/vorbis/vorbis.js",
+  "build/vorbis/vorbis.wasm",
+  "build/vorbis/install/lib/{% if os() == 'windows' %}ogg.lib{% else %}libogg.a{% endif %}",
+  "build/vorbis/install/lib/{% if os() == 'windows' %}vorbis.lib{% else %}libvorbis.a{% endif %}",
+  "build/vorbis/install/lib/{% if os() == 'windows' %}vorbisfile.lib{% else %}libvorbisfile.a{% endif %}",
+]
 run = "node tools/vorbis-build.mjs"
+
+# Date validated archives after successful CMake runs so unchanged contents remain
+# current in mise. Declaring the archives also repairs missing build outputs.
+["deps:vorbis:native"]
+depends = ["deps:vorbis"]
+sources = ["runtime/vorbis/**", "tools/vorbis-build.mjs", "tools/toolchain.mjs", "tools/host-platform.mjs", "tools/command-timing.mjs", ".mise/toolchain.toml"]
+outputs = [
+  "build/vorbis/native/{% if os() == 'windows' %}Release/bytorio-vorbis.lib{% else %}libbytorio-vorbis.a{% endif %}",
+]
+run = "node tools/vorbis-build.mjs --bridge"
 
 ["test:ogg"]
 description = "Verify Vorbis looping and EOF in both SDKs and hosts"
 run = "node tools/verify-ogg.mjs"
+
+# macOS links this SDL3 build; Windows uses Odin's vendored SDL3.dll.
+["deps:sdl3:native"]
+sources = ["tools/sdl3-build.mjs", "tools/toolchain.mjs", "tools/host-platform.mjs", "tools/command-timing.mjs", ".mise/toolchain.toml"]
+outputs = [
+  "{% if os() == 'windows' %}build/sdl3/native.stamp{% else %}build/sdl3/install/lib/libSDL3.0.dylib{% endif %}",
+]
+run = "node tools/sdl3-build.mjs"

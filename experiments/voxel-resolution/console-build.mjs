@@ -78,13 +78,13 @@ for (const language of ["odin", "luau"]) {
     formatSource(source, `main.${language}`),
   );
   await buildProject(project);
-  const htmlPath = resolve(project, "build/web/player.html");
+  const htmlPath = resolve(project, "build/web/debug.html");
   const html = await readFile(htmlPath, "utf8");
   await writeFile(
     htmlPath,
     html.replace(
-      '<script type="module" src="./player.js"></script>',
-      '<script>globalThis.playerInstructions="WASD: walk · Q/E: rotate camera · Arrows: pan · R: reset · Space: 640×360 (hold)";</script>\n<script type="module" src="./player.js"></script>',
+      '<script type="module" src="./debug-player.js"></script>',
+      '<script>globalThis.playerInstructions="WASD: walk · Q/E: rotate camera · Arrows: pan · R: reset · Space: 640×360 (hold)";</script>\n<script type="module" src="./debug-player.js"></script>',
     ),
   );
 }

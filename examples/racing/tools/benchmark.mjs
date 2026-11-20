@@ -7,6 +7,7 @@ import { cpus, platform, arch } from "node:os";
 import { once } from "node:events";
 import { chromium } from "playwright";
 import { serve } from "../../../tools/serve.mjs";
+import { nativePlayer } from "../../../tools/toolchain.mjs";
 import {
   uploadGraphics,
   submitDrawing,
@@ -70,7 +71,7 @@ for (let sample = 0; sample < samples; sample++) {
         ...(variant === "luauCold" ? ["--no-executor-cache"] : []),
       );
     }
-    const result = spawnSync(resolve(`${root}/native/player.exe`), args, {
+    const result = spawnSync(resolve(`${root}/native/${nativePlayer}`), args, {
       encoding: "utf8",
       timeout: 60000,
       maxBuffer: 4 * 1024 * 1024,

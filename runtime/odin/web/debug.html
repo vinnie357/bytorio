@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Game player</title>
+    <link rel="icon" href="data:," />
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: system-ui, sans-serif;
+      }
+      body {
+        margin: 0;
+        min-height: 100dvh;
+        display: grid;
+        place-items: center;
+        background: #10131e;
+        color: #dfeae7;
+      }
+      main {
+        text-align: center;
+        padding: 16px;
+      }
+      canvas {
+        display: block;
+        margin: auto;
+        background: #141828;
+        image-rendering: pixelated;
+        touch-action: none;
+        outline: none;
+      }
+      button {
+        margin: 20px 0 8px;
+        padding: 12px 24px;
+        border: 0;
+        border-radius: 6px;
+        background: #70f0c0;
+        color: #10131e;
+        font: inherit;
+        cursor: pointer;
+      }
+      #screen:fullscreen {
+        display: grid;
+        place-items: center;
+        background: #000;
+      }
+      #screen {
+        position: relative;
+      }
+      #performance {
+        position: absolute;
+        top: 6px;
+        left: 6px;
+        padding: 6px 8px;
+        text-align: left;
+        white-space: pre-line;
+        font: 12px/1.5 monospace;
+        color: #fff;
+        background: #000b;
+        pointer-events: none;
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+      #status {
+        max-width: 700px;
+        min-height: 1.5em;
+        color: #b2bfcc;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div id="screen">
+        <output id="performance">Waiting for frames…</output>
+        <canvas
+          id="canvas"
+          width="640"
+          height="360"
+          tabindex="0"
+          aria-label="Game display"
+        ></canvas>
+      </div>
+      <button id="start" disabled>Start game</button>
+      <button id="fullscreen">Fullscreen</button>
+      <label
+        >Frame rate
+        <select id="frame-rate">
+          <option value="capped" selected>Capped</option>
+          <option value="uncapped">Uncapped</option>
+          <option value="native">Native (display refresh)</option>
+        </select>
+      </label>
+      <label
+        >FPS cap <input id="frame-rate-cap" type="number" min="1" max="240" step="1" value="60"
+      /></label>
+      <label>Open cartridge <input id="cartridge" type="file" accept=".png,image/png" /></label>
+      <fieldset>
+        <legend>Graphics settings (applying restarts the game)</legend>
+        <label
+          >Renderer
+          <select id="graphics-backend">
+            <option value="cpu">CPU</option>
+            <option value="gpu">GPU 3D + CPU 2D</option>
+            <option value="auto">Auto</option>
+          </select></label
+        >
+        <label
+          >Supersampling
+          <select id="graphics-ssaa">
+            <option value="off">Off</option>
+            <option value="2x">2× per axis</option>
+            <option value="1080p">Up to 1080p</option>
+          </select></label
+        >
+        <label><input id="graphics-snap" type="checkbox" /> Snap orthographic camera</label>
+        <label><input id="graphics-smooth" type="checkbox" /> Smooth pan presentation</label>
+        <label><input id="graphics-resident" type="checkbox" /> GPU-resident meshes</label>
+        <label
+          ><input id="graphics-surface" type="checkbox" /> Whole-scene surface samples
+          (experimental, GPU)</label
+        >
+        <button id="graphics-apply">Apply graphics settings</button>
+        <p id="graphics-status" role="status"></p>
+      </fieldset>
+      <p id="status" role="status">Loading game player…</p>
+    </main>
+    <script type="module" src="./debug-player.js"></script>
+  </body>
+</html>

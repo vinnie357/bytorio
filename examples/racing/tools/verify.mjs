@@ -5,6 +5,7 @@ import { resolve } from "node:path";
 import { once } from "node:events";
 import { chromium } from "../../../tools/browser-timing.mjs";
 import { serve } from "../../../tools/serve.mjs";
+import { nativePlayer } from "../../../tools/toolchain.mjs";
 import {
   loadSource,
   checkExecutor,
@@ -147,7 +148,7 @@ for (const language of ["odin", "luau"]) {
     if (language === "luau") {
       args.push("--source", `${root}/native/racing.luau`);
     }
-    const result = spawnSync(resolve(`${root}/native/player.exe`), args, {
+    const result = spawnSync(resolve(`${root}/native/${nativePlayer}`), args, {
       encoding: "utf8",
       timeout: 60000,
       maxBuffer: 2 * 1024 * 1024,
@@ -160,7 +161,7 @@ for (const language of ["odin", "luau"]) {
     );
   }
   const smoke = spawnSync(
-    resolve(`${root}/native/player.exe`),
+    resolve(`${root}/native/${nativePlayer}`),
     [
       "--game",
       `${root}/native/${language === "odin" ? "game" : "luau-executor"}.wasm`,
@@ -196,9 +197,32 @@ const browser = await chromium.launch({
 });
 try {
   const page = await browser.newPage({ viewport: { width: 1100, height: 900 } });
+  // Exercise delayed audio startup without delaying the user-gesture call itself.
+  await page.addInitScript(() => {
+    const resume = AudioContext.prototype.resume;
+    AudioContext.prototype.resume = function (...args) {
+      return resume.apply(this, args).then(() => new Promise((done) => setTimeout(done, 200)));
+    };
+    const PlayerWorker = Worker;
+    globalThis.Worker = class extends PlayerWorker {
+      constructor(...args) {
+        super(...args);
+        this.addEventListener("message", ({ data }) => {
+          if (data.type === "frame" || data.type === "ready") {
+            globalThis.racingFrameTick = data.ticks;
+          }
+          if (data.type === "stepped" && data.ticks >= 240) {
+            // Pause before the player handles an update with no new frame.
+            globalThis.racingPausedAfterStep = true;
+            window.dispatchEvent(new Event("blur"));
+          }
+        });
+      }
+    };
+  });
   for (const language of ["odin", "luau"]) {
     await page.goto(
-      `http://127.0.0.1:${server.address().port}/player.html${language === "luau" ? "?game=./racing.luau" : ""}`,
+      `http://127.0.0.1:${server.address().port}/debug.html?fps=30${language === "luau" ? "&game=./racing.luau" : ""}`,
     );
     await page.waitForFunction(() => playerStatus.ready || playerStatus.error);
     assert.equal(await page.evaluate(() => playerStatus.error), "");
@@ -240,19 +264,27 @@ try {
       { race, handling, language },
     );
     assert.deepEqual(traces, [expected, handlingExpected], `${language} browser parity`);
-    await page.locator("#start").click();
+    // Hold gas before startup so every simulation tick has the replay's input,
+    // even while asynchronous audio setup has not returned focus to the canvas.
+    await page.locator("canvas").focus();
     await page.keyboard.down("ArrowUp");
-    await page.waitForFunction(() => playerStatus.ticks >= 240);
-    await page.evaluate(() => window.dispatchEvent(new Event("blur")));
-    await page.waitForTimeout(100);
+    await page.locator("#start").click();
+    await page.waitForFunction(() => globalThis.racingPausedAfterStep);
     await page.keyboard.up("ArrowUp");
     const live = await page.evaluate(() => playerStatus),
       driven = await instance("odin");
+    const observedFrameTick = await page.evaluate(() => globalThis.racingFrameTick);
+    assert.ok(live.ticks > observedFrameTick, "simulation advanced beyond the displayed frame");
+    assert.equal(live.renderedTicks, observedFrameTick, "rendered tick matches the frame message");
     let drivenFrame;
-    for (let tick = 0; tick < live.ticks; tick++) {
+    for (let tick = 0; tick < live.renderedTicks; tick++) {
       drivenFrame = step(driven, 4);
     }
-    assert.equal(live.hash, drivenFrame.hash, "keyboard acceleration matches held-gas replay");
+    assert.equal(
+      live.hash,
+      drivenFrame.hash,
+      `${language} keyboard acceleration matches held-gas replay`,
+    );
     assert.ok((await page.evaluate(() => playerAudio.played)) > 0, "gesture-unlocked audio");
     await page.locator("canvas").screenshot({ path: `${out}/${language}-browser.png` });
   }

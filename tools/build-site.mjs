@@ -42,22 +42,27 @@ for (const game of games) {
   }
   const target = resolve(output, "games", game.id);
   await cp(source, target, { recursive: true });
-  // Use the canonical player markup so required runtime controls stay in sync.
-  // Legacy demo control scripts are deliberately not included in this shell.
+  // Configure the SDK player through its public configuration contract.
   const player = await readFile(resolve(repo, "runtime/odin/web/player.html"), "utf8");
   await writeFile(
     resolve(target, "player.html"),
     player
       .replace("<title>Game player</title>", `<title>${escape(game.title)} · Bytorio</title>`)
-      .replace("</head>", '<link rel="stylesheet" href="./showcase-player.css"></head>')
-      .replace(
-        "<body>",
-        `<body data-action="${game.action}" data-instructions="${escape(game.controls)}">`,
-      )
-      .replace("</body>", '<script type="module" src="./showcase-controls.js"></script></body>'),
+      .replace("</head>", '<link rel="stylesheet" href="./showcase-player.css"></head>'),
+  );
+  await writeFile(
+    resolve(target, "player-config.json"),
+    JSON.stringify(
+      {
+        title: game.title,
+        instructions: game.controls,
+        controls: { visibility: "always", overrides: { action: { label: game.action } } },
+      },
+      null,
+      2,
+    ),
   );
   await cp(resolve(repo, "site/player.css"), resolve(target, "showcase-player.css"));
-  await cp(resolve(repo, "site/player-controls.js"), resolve(target, "showcase-controls.js"));
   await emit(`showcase/${game.id}/index.html`, gamePage(game));
 }
 await emit("index.html", home());
@@ -209,7 +214,7 @@ await emit(
   "docs/index.html",
   docShell(
     "Documentation",
-    `<p class="eyebrow">THE CREATOR’S HANDBOOK</p><h1>A small machine.<br>An open book.</h1><p>From your first frame to the details of the cartridge format. Everything you need to understand Bytorio and make it your own.</p><div class="doc-index"><a href="docs/getting-started.html"><strong>Start making</strong><span>Set up your tools and run your first game in Luau or Odin.</span></a><a href="sdk/api.html"><strong>Find an API</strong><span>Drawing, input, resources, and the game lifecycle.</span></a><a href="sdk/graphics.html"><strong>Build a world</strong><span>Textures, explicit passes, graphics, and display modes.</span></a><a href="sdk/synthesis.html"><strong>Make some noise</strong><span>PCM audio, synthesized voices, and effects.</span></a></div><aside class="note">SDK 0.2.0 is the published resource profile. 3D and Ogg streaming use explicit preview profiles. The Windows x64 CLI preview creates projects and downloads SDKs. Build and run commands still require the source setup. Exported games run in browsers.</aside><h2 id="all-guides">All guides & specifications</h2><ul>${[
+    `<p class="eyebrow">THE CREATOR’S HANDBOOK</p><h1>A small machine.<br>An open book.</h1><p>From your first frame to the details of the cartridge format. Everything you need to understand Bytorio and make it your own.</p><div class="doc-index"><a href="docs/getting-started.html"><strong>Start making</strong><span>Set up your tools and run your first game in Luau or Odin.</span></a><a href="sdk/api.html"><strong>Find an API</strong><span>Drawing, input, resources, and the game lifecycle.</span></a><a href="sdk/graphics.html"><strong>Build a world</strong><span>Textures, explicit passes, graphics, and display modes.</span></a><a href="sdk/synthesis.html"><strong>Make some noise</strong><span>PCM audio, synthesized voices, and effects.</span></a></div><aside class="note">SDK 0.2.0 is the published resource profile. 3D and Ogg streaming use explicit preview profiles. The Windows and Mac CLI preview creates projects and downloads SDKs; <a href="https://github.com/ctxshift/bytorio/releases">choose a CLI release</a> or <a href="docs/getting-started.html#install-with-mise">install with mise</a>. Build and run commands still require the source setup. Exported games run in browsers.</aside><h2 id="all-guides">All guides & specifications</h2><ul>${[
       ...documents,
     ]
       .sort((a, b) => a[1].title.localeCompare(b[1].title))
