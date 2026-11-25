@@ -7,16 +7,26 @@ import { spawnSync } from "node:child_process";
 import { once } from "node:events";
 import { chromium } from "./browser-timing.mjs";
 import { createProject, packProject } from "./sdk/project.mjs";
-import { chunks, chunk, signature, PNG_LIMIT, defaultCover } from "./sdk/cartridge.mjs";
+import {
+  chunks,
+  chunk,
+  signature,
+  PNG_LIMIT,
+  defaultCover,
+  encodeCartridge,
+} from "./sdk/cartridge.mjs";
 import { decodeCartridge } from "../runtime/odin/web/cartridge.js";
 import { serve } from "./serve.mjs";
 import { gameSource } from "./fixtures/luau-source.mjs";
+import { sourceCode, sourcePng } from "./fixtures/luau-source-cartridge.mjs";
 
 const root = resolve("build/cartridge-verification", randomUUID());
 await mkdir(root, { recursive: true });
 const projects = {},
   images = {},
   reports = {};
+let largeLuauCartridge;
+let oversizedLuauCartridge;
 const env = {
   ...process.env,
   SDL_VIDEODRIVER: "dummy",
@@ -71,11 +81,71 @@ for (const language of ["luau", "odin"]) {
   );
   assert.ok(reports[language].audioQueuedFrames > 0);
   if (language === "luau") {
+    const oversizedCode = sourceCode(524289);
+    assert.equal(oversizedCode.length, 524289);
+    const oversizedSourcePath = resolve(project, "oversized-source.luau");
+    await writeFile(oversizedSourcePath, oversizedCode);
+    assert.match(
+      native(
+        language,
+        [
+          "--game",
+          resolve(project, "build/native/luau-executor.wasm"),
+          "--source",
+          oversizedSourcePath,
+          "--check",
+        ],
+        1,
+      ).stderr,
+      /cartridge or source file exceeds size limit or is empty/,
+      "native --source rejects exactly 524289 bytes before executor loading",
+    );
+    oversizedLuauCartridge = sourcePng(oversizedCode);
+    const oversizedCartridgePath = resolve(project, "oversized-source.png");
+    await writeFile(oversizedCartridgePath, oversizedLuauCartridge);
+    assert.match(
+      native(language, ["--game", oversizedCartridgePath, "--check"], 1).stderr,
+      /invalid cartridge title or code length/,
+      "native cartridge parser rejects exactly 524289 bytes of Luau code",
+    );
+    const sourceRuntime = (
+      await WebAssembly.instantiate(await readFile(resolve(project, "build/web/runtime.wasm")), {
+        env: { sin: Math.sin },
+      })
+    ).instance.exports;
+    assert.throws(
+      () => decodeCartridge(sourceRuntime, oversizedLuauCartridge),
+      /invalid cartridge title or code length/,
+      "web cartridge parser rejects exactly 524289 bytes of Luau code",
+    );
+    const cartridgeOptions = {
+      title: "PNG luau Ω",
+      language,
+      display: [320, 180],
+      assets: JSON.parse(await readFile(resolve(project, "assets.json"), "utf8")),
+    };
+    assert.throws(
+      () => encodeCartridge({ ...cartridgeOptions, code: oversizedCode }),
+      /Invalid cartridge language or code size/,
+    );
     const source = gameSource(
       300000,
       await readFile(resolve(project, "build/native/game.luau"), "utf8"),
     );
     assert.ok(Buffer.byteLength(source) >= 300000 && Buffer.byteLength(source) < 310000);
+    largeLuauCartridge = encodeCartridge({ ...cartridgeOptions, code: Buffer.from(source) });
+    assert.deepEqual(
+      decodeCartridge(sourceRuntime, largeLuauCartridge).code,
+      new Uint8Array(Buffer.from(source)),
+      "300 KB Luau code round trips through the packer and web decoder",
+    );
+    const largeCartridgePath = resolve(root, "large-source.png");
+    await writeFile(largeCartridgePath, largeLuauCartridge);
+    assert.deepEqual(
+      JSON.parse(native(language, ["--game", largeCartridgePath, "--smoke"]).stdout),
+      reports[language],
+      "native cartridge loading preserves frames and audio for a 300 KB Luau game",
+    );
     const sourcePath = resolve(project, "large-source.luau");
     await writeFile(sourcePath, source);
     assert.deepEqual(
@@ -194,6 +264,7 @@ const malformed = [
     /critical/,
   ],
   ["oversize", Buffer.alloc(PNG_LIMIT + 1), /size|2 MiB/],
+  ["luau-code-size", oversizedLuauCartridge, /invalid cartridge title or code length/],
 ];
 for (const [name, bytes, message] of malformed) {
   assert.throws(() => decodeCartridge(runtime, bytes), message, name);
@@ -252,6 +323,15 @@ try {
     );
     await page.screenshot({ path: resolve(root, `${language}.png`) });
   }
+  await page.goto(`${base}/luau/build/web/player.html?game=../../../large-source.png&smoke`);
+  await page.waitForFunction(() => playerStatus.ready || playerStatus.error);
+  assert.equal(await page.evaluate(() => playerStatus.error), "");
+  await page.locator("#start").click();
+  await page.waitForFunction(() => playerStatus.ticks >= 120 || playerStatus.error);
+  assert.equal(await page.evaluate(() => playerStatus.error), "");
+  assert.equal(await page.evaluate(() => playerStatus.hash), reports.luau.hash);
+  assert.equal(await page.evaluate(() => playerStatus.sounds), reports.luau.sounds);
+  assert.ok(await page.evaluate(() => playerAudio.played > 0 && playerAudio.peak > 0));
   await page.goto(`${base}/luau/build/web/player.html?smoke`);
   await page.waitForFunction(() => playerStatus.ready || playerStatus.error);
   for (const [name, bytes, message] of [

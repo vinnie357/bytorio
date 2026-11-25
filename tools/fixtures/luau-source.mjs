@@ -5,7 +5,7 @@ export function gameSource(
 local game = {}
 function game.init() end
 function game.update() end
-function game.draw() console.clear(0xff102030) end
+function game.draw() console.clear(48, 32, 16) end
 return game
 `,
 ) {

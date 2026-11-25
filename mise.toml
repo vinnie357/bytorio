@@ -178,6 +178,7 @@ run = "node --test tools/bundle-strip.test.mjs tools/sdk/assets-content.test.mjs
 
 [tasks."test:luau-source-limit"]
 description = "Verify the 512 KiB Luau source limit"
+depends = ["build:odin", "deps:luau"]
 run = "node --test tools/luau-source-limit.test.mjs"
 
 [tasks."test:assets-content"]
