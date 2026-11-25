@@ -321,7 +321,7 @@ try {
 }
 // SDK error behavior, caught independently of rendering and reset on reload.
 const luau = await pair("luau");
-for (const minimumBytes of [500000, 520000]) {
+for (const minimumBytes of [500000, 520000, 524288]) {
   const bytes = await readFile(resolve(paths.luau, "build/web/luau-executor.wasm"));
   console.log(await sourceProof(bytes, imports, contract, minimumBytes));
 }

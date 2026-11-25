@@ -6,6 +6,7 @@ import test from "node:test";
 import { decodeCartridge } from "../runtime/odin/web/cartridge.js";
 import {
   checkExecutor,
+  configureResources,
   inspectGuest,
   loadSource,
   rasterizeDrawing,
@@ -43,16 +44,25 @@ function memoryDeclarations(value, path = "") {
   });
 }
 
+let profilesWithGuestMemory = 0;
 for (const name of (await readdir(resolve(repo, "sdk/profiles")))
   .filter((name) => name.endsWith(".json"))
   .sort()) {
   const profile = JSON.parse(await readFile(resolve(repo, "sdk/profiles", name)));
-  for (const [path, value] of memoryDeclarations(profile)) {
+  const declarations = memoryDeclarations(profile);
+  if (declarations.length) {
+    profilesWithGuestMemory++;
+  }
+  for (const [path, value] of declarations) {
     test(`${name} ${path} allows 32 MiB of guest memory`, () => {
       assert.equal(value, guestMemoryLimit, `${name}: ${path}`);
     });
   }
 }
+
+test("at least one profile declares guestMemoryBytes", () => {
+  assert.ok(profilesWithGuestMemory > 0, "no profiles declare guestMemoryBytes");
+});
 
 for (const [path, declaration] of [
   ["runtime/odin/web/constants.js", /export const MAX_MEMORY_BYTES = (\d+);/],
@@ -96,6 +106,46 @@ test("inspectGuest rejects a memory maximum one page over 32 MiB", () => {
   );
 });
 
+function completionMailbox(capacity) {
+  const sessions = [];
+  const game = {
+    game_abi: () => 1,
+    game_frame_size: () => 40,
+    game_resource_protocol: () => 2,
+    game_resource_configure: (session) => {
+      assert.equal(session, 1);
+      return 1;
+    },
+    game_commit: () => 0,
+    game_commit_size: () => 0,
+    game_commit_ack: () => 1,
+    game_resource_mailbox: () => 0,
+    game_resource_mailbox_capacity: () => capacity,
+    game_resource_mailbox_size: () => 1,
+  };
+  const runtime = {
+    runtime_resource_reset: (protocol) => {
+      sessions.push(protocol);
+      return 1;
+    },
+  };
+  return { game, runtime, sessions };
+}
+
+for (const capacity of [8388608, guestMemoryLimit]) {
+  test(`configureResources accepts a ${capacity}-byte completion mailbox capacity`, () => {
+    const { game, runtime, sessions } = completionMailbox(capacity);
+    assert.doesNotThrow(() => configureResources(game, runtime));
+    assert.deepEqual(sessions, [2]);
+  });
+}
+
+test("configureResources rejects a completion mailbox capacity one byte over 32 MiB", () => {
+  const { game, runtime, sessions } = completionMailbox(guestMemoryLimit + 1);
+  assert.throws(() => configureResources(game, runtime), /Invalid completion mailbox capacity/);
+  assert.deepEqual(sessions, []);
+});
+
 test("cartridge specification documents a 32 MiB guest memory maximum", async () => {
   const text = (await readFile(resolve(repo, "docs/cartridge-spec.md"), "utf8")).replace(
     /\s+/g,
@@ -107,8 +157,13 @@ test("cartridge specification documents a 32 MiB guest memory maximum", async ()
   assert.doesNotMatch(text, /(?:maximum at or below|inside the) 8 MiB/);
 });
 
-for (const minimumBytes of [500000, 520000]) {
-  test(`executor initializes at least ${minimumBytes} source bytes within the memory and heap budgets`, async () => {
+test("exact-limit source fixture contains exactly 524288 bytes", () => {
+  assert.equal(sourceCode(limit).length, limit);
+});
+
+for (const minimumBytes of [500000, 520000, 524288]) {
+  const size = minimumBytes === limit ? `exactly ${limit}` : `at least ${minimumBytes}`;
+  test(`executor initializes ${size} source bytes within the memory and heap budgets`, async () => {
     const bytes = await readFile(resolve(repo, "build/luau-executor/luau-executor.wasm"));
     const names = [
       "content_size",
@@ -332,6 +387,34 @@ test("native --source rejects exactly 524289 bytes at the file size limit", asyn
   const result = await nativeSource(t, code, false);
   assert.equal(result.status, 1, result.stderr);
   assert.match(result.stderr, /cartridge or source file exceeds size limit or is empty/);
+});
+
+test("native guest initializes and runs 520000 source bytes within the memory limit", async (t) => {
+  const source = sourceCode(520000);
+  assert.ok(source.length >= 520000 && source.length <= limit);
+  const result = await nativeSource(t, source, false);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(JSON.parse(result.stdout).ticks, 120);
+});
+
+test("native guest rejects a memory maximum one page over 32 MiB", async (t) => {
+  const module = moduleWithMemory(guestMemoryLimit / wasmPageBytes + 1);
+  assert.ok(WebAssembly.validate(module), "memory fixture must be valid Wasm");
+  const directory = await mkdtemp(join(repo, "build/luau-memory-native-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const path = join(directory, "over-limit.wasm");
+  await writeFile(path, module);
+  const result = spawnSync(
+    resolve(repo, "build/odin-player/native", nativePlayer),
+    ["--game", path, "--check"],
+    {
+      encoding: "utf8",
+      timeout: 30000,
+    },
+  );
+  assert.ifError(result.error);
+  assert.equal(result.status, 1, result.stderr);
+  assert.match(result.stderr, /game memory must declare .* maximum or less/i);
 });
 
 for (const bytes of [10000, 300000]) {

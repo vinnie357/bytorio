@@ -25,6 +25,8 @@ export function moduleWithMemory(maximumPages) {
     ["game_update", 0, 3],
     ["game_draw", 0, 4],
   ];
+  const abiBody = [0, 0x41, 1, 0x0b];
+  const frameSizeBody = [0, 0x41, 40, 0x0b];
   const body = [0, 0x41, 0, 0x0b];
   return Uint8Array.from([
     0,
@@ -44,10 +46,10 @@ export function moduleWithMemory(maximumPages) {
     ]),
     ...section(10, [
       5,
-      body.length,
-      ...body,
-      body.length,
-      ...body,
+      abiBody.length,
+      ...abiBody,
+      frameSizeBody.length,
+      ...frameSizeBody,
       2,
       0,
       0x0b,
