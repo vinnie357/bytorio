@@ -20,6 +20,7 @@ import { formatCacheKey, formatSource } from "./code-tools.mjs";
 import * as commandTiming from "./command-timing.mjs";
 import { repo, tool } from "./toolchain.mjs";
 
+const codeToolsUrl = new URL("./code-tools.mjs", import.meta.url).href;
 const source = Array.from(
   { length: 250 },
   (_, index) =>
@@ -33,7 +34,7 @@ function scratch(t) {
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const cache = join(root, "cache");
   mkdirSync(cache);
-  return { cache, timings: join(root, "timings.jsonl") };
+  return { root, cache, timings: join(root, "timings.jsonl") };
 }
 
 function environment(t, { cache, timings }) {
@@ -78,8 +79,8 @@ function checkedNodeArgs(args) {
   return args;
 }
 
-function child(script, options = {}) {
-  const worker = spawn(process.execPath, checkedNodeArgs(["--input-type=module", "-e", script]), {
+function child(args, options = {}) {
+  const worker = spawn(process.execPath, checkedNodeArgs(args), {
     cwd: repo,
     ...options,
   });
@@ -108,11 +109,13 @@ test("concurrent identical inputs share one formatter convergence", async (t) =>
 
   const shared = scratch(t);
   const script = `
-    import { formatSource } from "./tools/code-tools.mjs";
+    import { formatSource } from ${JSON.stringify(codeToolsUrl)};
     process.stdout.write(formatSource(${JSON.stringify(source)}, "game.luau"));
   `;
+  const scriptPath = join(shared.root, "worker.mjs");
+  writeFileSync(scriptPath, script);
   const children = Array.from({ length: 4 }, () =>
-    child(script, {
+    child([scriptPath], {
       env: {
         ...process.env,
         BYTORIO_FORMAT_CACHE: shared.cache,
@@ -164,7 +167,7 @@ test("changed source and filename each require formatting", (t) => {
 test("a dead owner's cache lock is recovered", { timeout: 10000 }, async (t) => {
   const paths = scratch(t);
   environment(t, paths);
-  const owner = child("");
+  const owner = child(["--input-type=module", "-e", ""]);
   assert.equal((await owner.completed).code, 0);
   const input = "local value = 1\n";
   const key = formatCacheKey(input, "game.luau");
@@ -181,7 +184,11 @@ test("a dead owner's cache lock is recovered", { timeout: 10000 }, async (t) => 
 test("a live owner's lock is waited for, not taken over", { timeout: 10000 }, async (t) => {
   const paths = scratch(t);
   environment(t, paths);
-  const owner = child('process.stdin.resume(); process.stderr.write("started\\n");');
+  const owner = child([
+    "--input-type=module",
+    "-e",
+    'process.stdin.resume(); process.stderr.write("started\\n");',
+  ]);
   const workers = [owner];
   t.after(async () => {
     for (const { process: worker } of workers) {
@@ -206,11 +213,15 @@ test("a live owner's lock is waited for, not taken over", { timeout: 10000 }, as
   utimesSync(lock, old, old);
   writeFileSync(paths.timings, "");
   const waiter = child(
-    `
+    [
+      "--input-type=module",
+      "-e",
+      `
       import { formatSource } from "./tools/code-tools.mjs";
       process.stderr.write("started\\n");
       process.stdout.write(formatSource(${JSON.stringify(input)}, "game.luau"));
     `,
+    ],
     {
       env: {
         ...process.env,
