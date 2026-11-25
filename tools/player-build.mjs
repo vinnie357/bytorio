@@ -1,7 +1,7 @@
-import { mkdir, rename } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { MAX_CARTRIDGE_BYTES, resourceSchema as limits } from "../runtime/odin/web/constants.js";
-import { copyAtomic, discardTemporary, temporaryBeside } from "./atomic-file.mjs";
+import { copyAtomic, discardTemporary, renameReplacing, temporaryBeside } from "./atomic-file.mjs";
 import { dependencyRoot, nativeLinkerFlags, nativePlayer, repo, run, tool } from "./toolchain.mjs";
 
 const artifact = process.argv[2];
@@ -37,7 +37,7 @@ async function build(source, flags, output) {
   const temporary = await temporaryBeside(output);
   try {
     run(odin, ["build", source, ...flags, `-out:${temporary}`], { stdio: "inherit" });
-    await rename(temporary, output);
+    await renameReplacing(temporary, output);
   } finally {
     await discardTemporary(temporary);
   }

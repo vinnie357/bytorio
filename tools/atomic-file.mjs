@@ -1,8 +1,41 @@
-import { copyFile, mkdir, rename, rm } from "node:fs/promises";
+import { copyFile, mkdir, rename as fsRename, rm } from "node:fs/promises";
 import { basename, dirname, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
+import { setTimeout as wait } from "node:timers/promises";
 
 const temporaryPrefix = ".tmp-";
+const retryableRenameErrors = new Set(["EPERM", "EACCES", "EBUSY"]);
+const maximumRenameDelayMs = 100;
+const maximumRenameWaitMs = 2000;
+
+// Windows readers briefly block replacement; cap retry waits at two seconds.
+export async function renameReplacing(
+  from,
+  to,
+  { rename = fsRename, attempts = 20, delayMs = 25 } = {},
+) {
+  if (!Number.isSafeInteger(attempts) || attempts < 1) {
+    throw new RangeError("Rename attempts must be a positive safe integer.");
+  }
+  if (!Number.isFinite(delayMs) || delayMs < 0) {
+    throw new RangeError("Rename delay must be a non-negative finite number.");
+  }
+  let remainingWaitMs = maximumRenameWaitMs;
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    try {
+      return await rename(from, to);
+    } catch (error) {
+      if (!retryableRenameErrors.has(error?.code) || attempt + 1 === attempts) {
+        throw error;
+      }
+      const delay = Math.min(delayMs * (attempt + 1), maximumRenameDelayMs, remainingWaitMs);
+      remainingWaitMs -= delay;
+      if (delay > 0) {
+        await wait(delay);
+      }
+    }
+  }
+}
 
 export const isTemporary = (path) => basename(path).startsWith(temporaryPrefix);
 
@@ -22,11 +55,11 @@ export const discardTemporary = (temporary) =>
   rm(dirname(temporary), { force: true, recursive: true });
 
 // Replaces `destination` with a copy of `source` in one rename.
-export async function copyAtomic(source, destination) {
+export async function copyAtomic(source, destination, { rename } = {}) {
   const temporary = await temporaryBeside(destination);
   try {
     await copyFile(source, temporary);
-    await rename(temporary, destination);
+    await renameReplacing(temporary, destination, { rename });
   } finally {
     await discardTemporary(temporary);
   }
