@@ -83,6 +83,15 @@ ogg_command :: proc(
     if !audio_command(t, w.op_audio_stream, id, {}, nil, phase, tick) { return false }
     index, valid := audio.stream_index(&t.audio.model, id)
     if !valid { return fail(r, "Ogg stream allocation failed") }
+    stream_frame := audio.load(&r.audio.published_stream_frame)
+    next_frame := stream_frame
+    if audio.load(&r.audio.published_leading) == 0 {
+        frame := audio.load(&r.audio.published_frame)
+        shift := frame - min(frame, stream_frame)
+        start := tick * w.audioFramesPerTick
+        // Before activation, prefetch must target the stream's start rather than stale feedback time.
+        next_frame = start - min(start, shift)
+    }
     t.ogg[index] = {
         id         = id,
         content    = args[0],
@@ -90,7 +99,7 @@ ogg_command :: proc(
         bytes      = u32(len(bytes)),
         loop_start = args[2],
         loop_end   = args[3],
-        next_frame = tick * w.audioFramesPerTick,
+        next_frame = next_frame,
     }
     return true
 }
@@ -108,7 +117,7 @@ ogg_request :: proc(r: ^Registry, index: u32) -> [w.oggRequestWords]u32 {
     if index >= w.maxOggStreams || r.audio == nil { return {} }
     s := &r.ogg[index]
     if s.id == 0 || s.ended { return {} }
-    frame := audio.load(&r.audio.published_frame)
+    frame := audio.load(&r.audio.published_stream_frame)
     if s.next_frame < frame {
         target := frame + w.audioLeadFrames
         ogg_advance(s, target - s.next_frame)

@@ -96,6 +96,8 @@ Engine :: struct {
     completion_overflow:                                                                  u64,
     // Atomic renderer publications; never inspect mutable DSP state on the producer.
     published_frame, processed, late, underruns, rejected_writes, completed:              u64,
+    published_stream_frame:                                                               u64,
+    published_leading:                                                                    u32,
     pause_request, epoch:                                                                 u32,
     // Renderer fields.
     events:                                                                               [w.maxAudioEvents]Command,
@@ -108,6 +110,7 @@ Engine :: struct {
     frame, processed_local, late_local, underruns_local, rejected_local, completed_local: u64,
     lead_remaining:                                                                       u32,
     simulation_frame:                                                                     u64,
+    stream_shift:                                                                         u64,
     paused:                                                                               bool,
     fade:                                                                                 Ramp,
     lead_phase:                                                                           f64,
@@ -156,6 +159,7 @@ create :: proc() -> ^Engine {
         target = 1,
     }
     e.lead_remaining = w.audioLeadFrames
+    e.published_leading = 1
     e.epoch = 1
     return e
 }
@@ -315,11 +319,9 @@ push :: proc(e: ^Engine, command: Command) {
     }
     e.events[at] = c
 }
-pop :: proc(e: ^Engine) -> Command {
-    result := e.events[0]
-    e.event_count -= 1
-    last := e.events[e.event_count]
-    at := 0
+sift_down :: proc(e: ^Engine, start: int) {
+    last := e.events[start]
+    at := start
     for at * 2 + 1 < e.event_count {
         child := at * 2 + 1
         if child + 1 < e.event_count && before(e.events[child + 1], e.events[child]) { child += 1 }
@@ -328,6 +330,14 @@ pop :: proc(e: ^Engine) -> Command {
         at = child
     }
     e.events[at] = last
+}
+pop :: proc(e: ^Engine) -> Command {
+    result := e.events[0]
+    e.event_count -= 1
+    if e.event_count > 0 {
+        e.events[0] = e.events[e.event_count]
+        sift_down(e, 0)
+    }
     return result
 }
 consume :: proc(e: ^Engine) {
@@ -335,7 +345,13 @@ consume :: proc(e: ^Engine) {
     for tail != head {
         batch := &e.batches[tail % w.maxAudioBatches]
         e.simulation_frame = max(e.simulation_frame, batch.simulation_frame)
-        for c in batch.commands[:batch.count] { push(e, c) }
+        for command in batch.commands[:batch.count] {
+            c := command
+            if c.op == w.op_audio_stream_write || c.op == w.op_audio_stream_end {
+                c.at += e.stream_shift
+            }
+            push(e, c)
+        }
         tail += 1
     }
     store(&e.tail, tail)
@@ -466,8 +482,8 @@ apply :: proc(e: ^Engine, c: Command) {
             e.rejected_local += 1; finish(e, c.lease, NO_VOICE, 0); break
         }
         s.chunks[s.count] = {
-            first = c.at,
-            end   = c.at + u64(c.frames),
+            first = c.at - e.stream_shift,
+            end   = c.at - e.stream_shift + u64(c.frames),
             lease = c.lease,
             data  = e.pool[int(c.page) * w.audioPageFrames:][:int(c.frames * 2)],
         }
@@ -478,10 +494,11 @@ logical_frame :: proc(e: ^Engine) -> [2]f32 {
     for e.event_count > 0 && e.events[0].at <= e.frame {
         apply(e, pop(e)); e.processed_local += 1
     }
+    stream_frame := e.frame - e.stream_shift
     // Stream chunks are ordered by event time; consume elapsed chunks even if no
     // voice currently reads that stream, so silence never defers stale PCM.
     for &s in e.streams {
-        for s.count > 0 && s.chunks[0].end <= e.frame {
+        for s.count > 0 && s.chunks[0].end <= stream_frame {
             finish(e, s.chunks[0].lease, NO_VOICE, 0)
             for i in 1 ..< s.count { s.chunks[i - 1] = s.chunks[i] }
             s.count -= 1
@@ -522,8 +539,10 @@ logical_frame :: proc(e: ^Engine) -> [2]f32 {
             found := false
             for &s in e.streams {
                 if !s.live || s.id != v.resource { continue }
-                if s.count > 0 && s.chunks[0].first <= e.frame && e.frame < s.chunks[0].end {
-                    at := int(e.frame - s.chunks[0].first) * 2
+                if s.count > 0 &&
+                   s.chunks[0].first <= stream_frame &&
+                   stream_frame < s.chunks[0].end {
+                    at := int(stream_frame - s.chunks[0].first) * 2
                     value = {f64(s.chunks[0].data[at]), f64(s.chunks[0].data[at + 1])}
                     found = true
                 }
@@ -570,6 +589,21 @@ render :: proc(e: ^Engine, output: []f32, rate: u32 = w.audioRate) {
         set_ramp(&e.fade, 0 if requested else 1, w.audioPauseFadeFrames)
     }
     if e.lead_remaining > 0 && e.simulation_frame > e.frame {
+        delta := e.simulation_frame - e.frame
+        // Stream time stays continuous while simulation time jumps to anchor timed voices.
+        changed := false
+        for &c in e.events[:e.event_count] {
+            if c.op == w.op_audio_stream_write || c.op == w.op_audio_stream_end {
+                c.at += delta
+                changed = true
+            }
+        }
+        if changed {
+            for parent := e.event_count / 2; parent > 0; parent -= 1 {
+                sift_down(e, parent - 1)
+            }
+        }
+        e.stream_shift += delta
         e.frame = e.simulation_frame
         e.device_ready = false
     }
@@ -600,6 +634,8 @@ render :: proc(e: ^Engine, output: []f32, rate: u32 = w.audioRate) {
         output[i * 2] = pair[0]; output[i * 2 + 1] = pair[1]
     }
     store(&e.published_frame, e.frame)
+    store(&e.published_stream_frame, e.frame - e.stream_shift)
+    store(&e.published_leading, u32(e.lead_remaining > 0))
     store(&e.processed, e.processed_local)
     store(&e.late, e.late_local)
     store(&e.underruns, e.underruns_local)

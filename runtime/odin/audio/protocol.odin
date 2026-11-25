@@ -4,6 +4,8 @@ import w "../resource_protocol"
 
 PACKET_MAGIC :: u32(0x31505541)
 FEEDBACK_MAGIC :: u32(0x31465541)
+// The high bit carries lead state beside the 53-bit stream frame without enlarging feedback.
+FEEDBACK_LEAD_FLAG :: u64(1) << 63
 word :: proc(b: []u8, at: int) -> u32 {
     return u32(b[at]) | u32(b[at + 1]) << 8 | u32(b[at + 2]) << 16 | u32(b[at + 3]) << 24
 }
@@ -267,7 +269,7 @@ feedback :: proc(e: ^Engine, destination: []u8) -> int {
         e.rejected_writes,
         e.completed,
         e.used,
-        0,
+        e.published_stream_frame | (FEEDBACK_LEAD_FLAG if e.published_leading != 0 else 0),
     }
     for value, i in values { put64(destination, 16 + i * 8, value) }
     for i in 0 ..< int(count) {
@@ -292,6 +294,10 @@ import_feedback :: proc(e: ^Engine, bytes: []u8) -> bool {
        word(bytes, 8) > DONE_CAPACITY ||
        u64(word(bytes, 8)) * 32 + 80 != u64(len(bytes)) { return false }
     if wide(bytes, 16) > w.audioMaxExactFrame || wide(bytes, 24) > e.submitted { return false }
+    stream_clock := wide(bytes, 72)
+    stream_frame := stream_clock & w.audioMaxExactFrame
+    if stream_clock & ~(u64(w.audioMaxExactFrame) | FEEDBACK_LEAD_FLAG) != 0 ||
+       stream_frame > wide(bytes, 16) { return false }
     seen: [w.maxAudioLeases]bool
     for i in 0 ..< int(word(bytes, 8)) {
         at := 80 + i * 32
@@ -306,6 +312,8 @@ import_feedback :: proc(e: ^Engine, bytes: []u8) -> bool {
         }
     }
     e.published_frame = max(e.published_frame, wide(bytes, 16))
+    e.published_stream_frame = max(e.published_stream_frame, stream_frame)
+    e.published_leading = u32(stream_clock & FEEDBACK_LEAD_FLAG != 0)
     e.processed = max(e.processed, wide(bytes, 24))
     e.late, e.underruns, e.rejected_writes, e.completed =
         wide(bytes, 32), wide(bytes, 40), wide(bytes, 48), wide(bytes, 56)
