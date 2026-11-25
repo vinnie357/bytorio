@@ -10,11 +10,13 @@ import {
   inspectGuest,
   loadSource,
   rasterizeDrawing,
+  readFrame,
   submitDrawing,
 } from "../runtime/odin/web/policy.js";
 import { gameSource } from "./fixtures/luau-source.mjs";
 import { packSource, sourceCode, sourcePng } from "./fixtures/luau-source-cartridge.mjs";
 import { sourceProof } from "./fixtures/luau-source-proof.mjs";
+import { heapExecutor, heapGameSource } from "./fixtures/luau-heap-proof.mjs";
 import { declaredMemoryMaximum, moduleWithMemory } from "./fixtures/wasm-memory.mjs";
 import { bundleLuau } from "./sdk/bundle.mjs";
 import { nativePlayer } from "./toolchain.mjs";
@@ -22,6 +24,7 @@ import { nativePlayer } from "./toolchain.mjs";
 const limit = 524288;
 const oldLimit = 262144;
 const guestMemoryLimit = 33554432;
+const luauHeapLimit = 8388608;
 const wasmPageBytes = 65536;
 const repo = resolve(import.meta.dirname, "..");
 const contract = JSON.parse(await readFile(resolve(repo, "sdk/contract.json")));
@@ -30,21 +33,22 @@ test("contract allows 32 MiB of guest memory", () => {
   assert.equal(contract.limits.guestMemoryBytes, guestMemoryLimit);
 });
 
-test("contract keeps the tracked Luau heap at 4 MiB", () => {
-  assert.equal(contract.limits.luauHeapBytes, 4194304);
+test("contract allows an 8 MiB tracked Luau heap", () => {
+  assert.equal(contract.limits.luauHeapBytes, luauHeapLimit);
 });
 
-function memoryDeclarations(value, path = "") {
+function memoryDeclarations(value, path = "", field = "guestMemoryBytes") {
   return Object.entries(value).flatMap(([key, child]) => {
     const name = path ? `${path}.${key}` : key;
-    if (key === "guestMemoryBytes") {
+    if (key === field) {
       return [[name, child]];
     }
-    return child && typeof child === "object" ? memoryDeclarations(child, name) : [];
+    return child && typeof child === "object" ? memoryDeclarations(child, name, field) : [];
   });
 }
 
 let profilesWithGuestMemory = 0;
+let profilesWithLuauHeap = 0;
 for (const name of (await readdir(resolve(repo, "sdk/profiles")))
   .filter((name) => name.endsWith(".json"))
   .sort()) {
@@ -58,7 +62,133 @@ for (const name of (await readdir(resolve(repo, "sdk/profiles")))
       assert.equal(value, guestMemoryLimit, `${name}: ${path}`);
     });
   }
+  const heapDeclarations = memoryDeclarations(profile, "", "luauHeapBytes");
+  if (heapDeclarations.length) {
+    profilesWithLuauHeap++;
+  }
+  for (const [path, value] of heapDeclarations) {
+    test(`${name} ${path} allows an 8 MiB tracked Luau heap`, () => {
+      assert.equal(value, luauHeapLimit, `${name}: ${path}`);
+    });
+  }
 }
+
+test("at least one profile declares luauHeapBytes", () => {
+  assert.ok(profilesWithLuauHeap > 0, "no profiles declare luauHeapBytes");
+});
+
+for (const [path, declaration] of [
+  ["runtime/odin/web/constants.js", /export const MAX_LUAU_HEAP_BYTES = (\d+);/],
+  ["runtime/odin/abi/constants.odin", /MAX_LUAU_HEAP_BYTES :: (\d+)/],
+  ["sdk/luau/constants.luau", /MAX_LUAU_HEAP_BYTES = (\d+),/],
+  ["experiments/luau-executor/console_constants.h", /constexpr auto MAX_LUAU_HEAP_BYTES = (\d+)u;/],
+]) {
+  test(`${path} generates an 8 MiB tracked Luau heap limit`, async () => {
+    const match = declaration.exec(await readFile(resolve(repo, path), "utf8"));
+    assert.ok(match, `missing MAX_LUAU_HEAP_BYTES declaration in ${path}`);
+    assert.equal(Number(match[1]), luauHeapLimit, path);
+  });
+}
+
+for (const [setting, argument] of [
+  ["LUA_GCSETGOAL", "125"],
+  ["LUA_GCSETSTEPMUL", "(\\d+)"],
+]) {
+  test(`executor sets ${setting} after lua_newstate`, async () => {
+    const source = await readFile(resolve(repo, "experiments/luau-executor/executor.cpp"), "utf8");
+    const init = source.slice(
+      source.indexOf("void game_init()"),
+      source.indexOf("void game_update("),
+    );
+    const allocation = init.indexOf("lua_newstate(");
+    const call = new RegExp(
+      `lua_gc\\(\\s*state\\s*,\\s*${setting}\\s*,\\s*${argument}\\s*\\)`,
+    ).exec(init);
+    assert.ok(allocation >= 0, "missing lua_newstate in game_init");
+    assert.ok(call, `missing lua_gc(state, ${setting}, ${argument}) after lua_newstate`);
+    assert.ok(call.index > allocation, `${setting} must follow lua_newstate`);
+    if (setting === "LUA_GCSETSTEPMUL") {
+      assert.ok(
+        Number(call[1]) > 200,
+        "GC step work must exceed Luau's default 200 to keep up with allocation at a 125% goal",
+      );
+    }
+  });
+}
+
+test("cartridge specification documents an 8 MiB tracked Luau heap", async () => {
+  const text = (await readFile(resolve(repo, "docs/cartridge-spec.md"), "utf8")).replace(
+    /\s+/g,
+    " ",
+  );
+  assert.ok(/8 MiB tracked Luau heap/.test(text), "missing 8 MiB tracked Luau heap statement");
+  assert.ok(
+    !/(?:4 MiB tracked Luau heap|tracked allocator limit is 4 MiB)/.test(text),
+    "cartridge specification must no longer state a 4 MiB tracked Luau heap",
+  );
+});
+
+test(
+  "real executor retains about 2.5 MB and survives 400 allocation-churn ticks",
+  { timeout: 10000 },
+  async () => {
+    const game = await heapExecutor(heapGameSource());
+    assert.doesNotThrow(() => game.game_init(), "heap workload init must not trap");
+    checkExecutor(game);
+    const liveBytes = game.game_heap_bytes();
+    assert.ok(liveBytes >= 2300000 && liveBytes <= 2800000, `${liveBytes} initial live heap bytes`);
+    console.log(`Luau heap workload: ${liveBytes} initial tracked live heap bytes`);
+    // 400 ticks allocate 204800 temporary rows while every initial row stays reachable.
+    for (let tick = 1; tick <= 400; tick++) {
+      assert.doesNotThrow(
+        () => game.game_update(0, 0, 0, 0),
+        `heap churn tick ${tick} must not trap`,
+      );
+      const peak = game.game_heap_peak();
+      assert.ok(
+        peak <= contract.limits.luauHeapBytes,
+        `${peak} peak bytes exceed the tracked heap cap`,
+      );
+      assert.ok(game.memory.buffer.byteLength <= contract.limits.guestMemoryBytes);
+      assert.doesNotThrow(
+        () => checkExecutor(game),
+        `heap churn tick ${tick}: ${peak}/${contract.limits.luauHeapBytes} peak heap bytes`,
+      );
+    }
+    const frame = readFrame(game);
+    assert.equal(frame.x, 3200, "all initial live rows remain reachable");
+    assert.equal(frame.y, 400, "all churn ticks completed");
+    assert.ok(game.game_heap_peak() <= contract.limits.luauHeapBytes);
+  },
+);
+
+test(
+  "real executor reports growing live data OOM through checkExecutor without exceeding its cap",
+  { timeout: 10000 },
+  async () => {
+    const game = await heapExecutor(heapGameSource({ growing: true }));
+    assert.doesNotThrow(() => game.game_init(), "growing workload init must not trap");
+    checkExecutor(game);
+    let failure;
+    let ticks = 0;
+    for (; ticks < 256; ticks++) {
+      assert.doesNotThrow(() => game.game_update(0, 0, 0, 0), "OOM must not escape as a Wasm trap");
+      assert.ok(game.game_heap_peak() <= contract.limits.luauHeapBytes);
+      assert.ok(game.memory.buffer.byteLength <= contract.limits.guestMemoryBytes);
+      try {
+        checkExecutor(game);
+      } catch (error) {
+        failure = error;
+        break;
+      }
+    }
+    assert.ok(failure, "growing reachable data must exhaust the tracked heap within 256 ticks");
+    assert.match(failure.message, /not enough memory|out of memory/i);
+    console.log(
+      `Luau growing heap: ${failure.message}, tick ${ticks + 1}, peak ${game.game_heap_peak()}/${contract.limits.luauHeapBytes} bytes`,
+    );
+  },
+);
 
 test("at least one profile declares guestMemoryBytes", () => {
   assert.ok(profilesWithGuestMemory > 0, "no profiles declare guestMemoryBytes");
