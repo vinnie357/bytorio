@@ -341,7 +341,7 @@ run = "node --test tools/validation-runner.test.mjs tools/frame-clock.test.mjs t
 
 [tasks."test:player-export"]
 description = "Verify complete player exports and missing-dependency failures"
-run = "node --test tools/player-export.test.mjs"
+run = "node --test tools/atomic-file.test.mjs tools/player-export.test.mjs"
 
 [tasks."test:format-cache"]
 description = "Verify formatter cache hits, concurrent callers and stale locks"
