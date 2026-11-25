@@ -176,6 +176,10 @@ run = "node --test tools/player-build-concurrent.test.mjs"
 description = "Verify the Luau bundler strips comments without moving a line"
 run = "node --test tools/bundle-strip.test.mjs tools/sdk/assets-content.test.mjs"
 
+[tasks."test:luau-source-limit"]
+description = "Verify the 512 KiB Luau source limit"
+run = "node --test tools/luau-source-limit.test.mjs"
+
 [tasks."test:assets-content"]
 description = "Verify graphics content bundling and manifest validation"
 run = "node --test tools/sdk/assets-content.test.mjs"
@@ -290,6 +294,7 @@ run = [
   {task = "test:build-tasks"},
   {task = "test:extract"},
   {task = "test:bundle-strip"},
+  {task = "test:luau-source-limit"},
   {task = "test:player-build-concurrent"},
   {task = "test:player-export"},
   {task = "test:format-cache"},

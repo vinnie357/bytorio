@@ -10,6 +10,7 @@ import { createProject, packProject } from "./sdk/project.mjs";
 import { chunks, chunk, signature, PNG_LIMIT, defaultCover } from "./sdk/cartridge.mjs";
 import { decodeCartridge } from "../runtime/odin/web/cartridge.js";
 import { serve } from "./serve.mjs";
+import { gameSource } from "./fixtures/luau-source.mjs";
 
 const root = resolve("build/cartridge-verification", randomUUID());
 await mkdir(root, { recursive: true });
@@ -69,6 +70,28 @@ for (const language of ["luau", "odin"]) {
     reports[language].hash,
   );
   assert.ok(reports[language].audioQueuedFrames > 0);
+  if (language === "luau") {
+    const source = gameSource(
+      300000,
+      await readFile(resolve(project, "build/native/game.luau"), "utf8"),
+    );
+    assert.ok(Buffer.byteLength(source) >= 300000 && Buffer.byteLength(source) < 310000);
+    const sourcePath = resolve(project, "large-source.luau");
+    await writeFile(sourcePath, source);
+    assert.deepEqual(
+      JSON.parse(
+        native(language, [
+          "--game",
+          resolve(project, "build/native/luau-executor.wasm"),
+          "--source",
+          sourcePath,
+          "--smoke",
+        ]).stdout,
+      ),
+      reports[language],
+      "native source loading accepts a 300 KB Luau game with unchanged frames and audio",
+    );
+  }
   // Prove the game is self-contained by removing its loose source/module.
   for (const platform of ["web", "native"]) {
     await unlink(
