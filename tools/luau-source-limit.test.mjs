@@ -159,6 +159,15 @@ test(
     assert.equal(frame.x, 3200, "all initial live rows remain reachable");
     assert.equal(frame.y, 400, "all churn ticks completed");
     assert.ok(game.game_heap_peak() <= contract.limits.luauHeapBytes);
+    const peak = game.game_heap_peak();
+    const gcBound = liveBytes * 1.6 + 256 * 1024;
+    console.log(
+      `Luau churn proof: ${liveBytes} live bytes, ${peak} peak bytes, ${(peak / liveBytes).toFixed(3)} peak/live`,
+    );
+    assert.ok(
+      peak <= gcBound,
+      `${peak} peak bytes exceed the tighter GC bound ${gcBound} for ${liveBytes} live bytes`,
+    );
   },
 );
 
