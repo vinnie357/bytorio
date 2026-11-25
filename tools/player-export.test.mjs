@@ -10,6 +10,12 @@ import { nativePlayer, repo, sdlLibraryName, windowsHost } from "./toolchain.mjs
 // Fixture bytes are not Mach-O, so skip real signing.
 const sign = async () => {};
 
+function checkedNodeArgs(args) {
+  const length = [process.execPath, ...args].join(" ").length;
+  assert.ok(length < 32767, `Windows command-line limit is 32,767 characters; received ${length}.`);
+  return args;
+}
+
 async function put(root, name, content = name) {
   const path = join(root, name);
   await mkdir(dirname(path), { recursive: true });
@@ -175,7 +181,7 @@ test("license exports tolerate concurrent atomic staging (#164)", async (t) => {
     }
     process.disconnect();
   `;
-  const worker = spawn(process.execPath, ["--input-type=module", "-e", script], {
+  const worker = spawn(process.execPath, checkedNodeArgs(["--input-type=module", "-e", script]), {
     cwd: repo,
     stdio: ["ignore", "ignore", "pipe", "ipc"],
   });

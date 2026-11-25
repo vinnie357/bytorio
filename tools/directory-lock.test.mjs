@@ -8,12 +8,20 @@ import { pathToFileURL } from "node:url";
 
 const module = pathToFileURL(resolve("tools/directory-lock.mjs")).href;
 
+function checkedNodeArgs(args) {
+  const length = [process.execPath, ...args].join(" ").length;
+  assert.ok(length < 32767, `Windows command-line limit is 32,767 characters; received ${length}.`);
+  return args;
+}
+
 // The lock releases on process exit, so each case runs in its own process.
 function hold(lock, timeoutMs) {
   const script = `import { acquireLock } from ${JSON.stringify(module)};
 await acquireLock(${JSON.stringify(lock)}, { timeoutMs: ${timeoutMs} });
 console.log("held");`;
-  return spawnSync(process.execPath, ["--input-type=module", "-e", script], { encoding: "utf8" });
+  return spawnSync(process.execPath, checkedNodeArgs(["--input-type=module", "-e", script]), {
+    encoding: "utf8",
+  });
 }
 
 test("a lock is released when its process exits", () => {
@@ -69,7 +77,7 @@ try {
 Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 120);
 rmSync(${JSON.stringify(inside)}, { force: true });`;
   return new Promise((done) => {
-    const child = spawn(process.execPath, ["--input-type=module", "-e", script]);
+    const child = spawn(process.execPath, checkedNodeArgs(["--input-type=module", "-e", script]));
     child.on("close", done);
   });
 }

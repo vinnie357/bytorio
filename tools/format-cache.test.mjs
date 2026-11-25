@@ -72,8 +72,14 @@ function formatterCalls(path, name) {
 
 const styluaCalls = (path) => formatterCalls(path, "stylua");
 
+function checkedNodeArgs(args) {
+  const length = [process.execPath, ...args].join(" ").length;
+  assert.ok(length < 32767, `Windows command-line limit is 32,767 characters; received ${length}.`);
+  return args;
+}
+
 function child(script, options = {}) {
-  const worker = spawn(process.execPath, ["--input-type=module", "-e", script], {
+  const worker = spawn(process.execPath, checkedNodeArgs(["--input-type=module", "-e", script]), {
     cwd: repo,
     ...options,
   });

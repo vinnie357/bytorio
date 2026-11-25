@@ -9,6 +9,12 @@ import { repo, run } from "./toolchain.mjs";
 
 const posix = { skip: process.platform === "win32" };
 
+function checkedNodeArgs(args) {
+  const length = [process.execPath, ...args].join(" ").length;
+  assert.ok(length < 32767, `Windows command-line limit is 32,767 characters; received ${length}.`);
+  return args;
+}
+
 function scratch(t) {
   const root = mkdtempSync(join(tmpdir(), "command-timeout-"));
   const reports = join(root, "reports");
@@ -76,7 +82,7 @@ test("timeouts retain process evidence without retrying", posix, (t) => {
   const started = Date.now();
   let failure;
   try {
-    run(process.execPath, ["-e", script], { timeout: 8000 });
+    run(process.execPath, checkedNodeArgs(["-e", script]), { timeout: 8000 });
   } catch (error) {
     failure = error;
   }
@@ -114,7 +120,7 @@ test("timeouts retain process evidence without retrying", posix, (t) => {
 test("a synchronous loop of commands leaves no child processes", posix, (t) => {
   scratch(t);
   for (let index = 0; index < 30; index++) {
-    assert.equal(run(process.execPath, ["-e", ""], { timeout: 3000 }), "");
+    assert.equal(run(process.execPath, checkedNodeArgs(["-e", ""]), { timeout: 3000 }), "");
   }
   const left = children();
   const remaining = watchdogs();
@@ -140,9 +146,12 @@ test("a command that throws before running stops its watchdog", posix, async (t)
       }
     }
   });
-  assert.throws(() => run(process.execPath, ["-e", "", "a\u0000b"], { timeout: 3000 }), {
-    code: "ERR_INVALID_ARG_VALUE",
-  });
+  assert.throws(
+    () => run(process.execPath, checkedNodeArgs(["-e", "", "a\u0000b"]), { timeout: 3000 }),
+    {
+      code: "ERR_INVALID_ARG_VALUE",
+    },
+  );
   const children = pids(["-P", String(process.pid)]).filter((pid) => !previous.has(pid));
   const deadline = Date.now() + 2000;
   let remaining;
@@ -161,14 +170,20 @@ test("a running command has a marked watchdog that stops on completion", posix, 
   scratch(t);
   const worker = spawn(
     process.execPath,
-    [
+    checkedNodeArgs([
       "--input-type=module",
       "-e",
       `
+        import assert from "node:assert/strict";
         import { run } from "./tools/toolchain.mjs";
-        run(process.execPath, ["-e", "setTimeout(() => {}, 1500)"], { timeout: 30000 });
+        const args = ["-e", "setTimeout(() => {}, 1500)"];
+        assert.ok(
+          [process.execPath, ...args].join(" ").length < 32767,
+          "Windows command-line limit is 32,767 characters.",
+        );
+        run(process.execPath, args, { timeout: 30000 });
       `,
-    ],
+    ]),
     { cwd: repo, stdio: ["ignore", "pipe", "pipe"] },
   );
   let stderr = "";
@@ -203,7 +218,7 @@ test("a running command has a marked watchdog that stops on completion", posix, 
 
 test("successful commands leave no reports or watchdogs", posix, (t) => {
   const { reports } = scratch(t);
-  assert.equal(run(process.execPath, ["-e", ""], { timeout: 3000 }), "");
+  assert.equal(run(process.execPath, checkedNodeArgs(["-e", ""]), { timeout: 3000 }), "");
   assert.deepEqual(watchdogs(), [], "successful commands must stop their watchdogs synchronously");
   assert.deepEqual(reportFiles(reports), []);
 });
