@@ -164,7 +164,7 @@ The version-2 native Odin guest allowance is 100 million Wasmtime fuel units per
 call to cover bounded full-frame serialization; old version-1/no-resource guests
 retain 10 million, and Luau retains its existing 500 million allowance. Fuel is
 not a millisecond guarantee. The resource quota remains 64 MiB, guest memory
-8 MiB, and tracked Luau heap 4 MiB. Pending readbacks, screen/output storage,
+32 MiB, and tracked Luau heap 8 MiB. Pending readbacks, screen/output storage,
 transaction snapshots and old/new versions are charged to the resource quota.
 
 Run `npm run test:graphics`. The equivalent

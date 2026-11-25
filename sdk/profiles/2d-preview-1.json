@@ -25,7 +25,7 @@
     "moduleBytes": 1048576,
     "guestMemoryBytes": 33554432,
     "luauSourceBytes": 524288,
-    "luauHeapBytes": 4194304,
+    "luauHeapBytes": 8388608,
     "commands": 16384,
     "textBytes": 16384,
     "textBytesPerCommand": 1024,

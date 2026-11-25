@@ -288,14 +288,14 @@ browser loaders validate the complete tuple before game callbacks, including PNG
 metadata. Loose payloads and PNG cartridges use the same negotiation.
 
 The default remains SDK 0.2.0 / `resource-av-1`. That published profile still
-negotiates protocol 4 and mask 7; its limits and opcode meanings are unchanged.
+negotiates protocol 4 and mask 7; its opcode meanings are unchanged.
 The shared protocol schema's `version` is the highest supported experimental
 version, while `stableVersion` identifies the published version. Protocols below
 5 reject 3D commands. ABI 1 games retain their compatibility path.
 
 See the [experimental profile](../sdk/profiles/compact-3d-preview-1.json) and
-[wire schema](../sdk/resource-protocol.json). The preview retains the 64 MiB
-resource budget, 8 MiB guest memory, 4 MiB Luau heap and 1 MiB commit payload.
+[wire schema](../sdk/resource-protocol.json). The preview allows a 64 MiB
+resource budget, 32 MiB guest memory, 8 MiB Luau heap and 1 MiB commit payload.
 The base PNG envelope for cover art and code has a separate 2 MiB budget.
 [Indexed content](indexed-content.md) can additionally package up to 512 MiB,
 including its index, without increasing guest memory or decoded-resource budgets.

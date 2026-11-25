@@ -43,10 +43,11 @@ rejected. The content imports add no guest memory.
 
 Every module defines and exports exactly one unshared, 32-bit memory with an
 explicit maximum at or below 32 MiB. Module size is at most 1 MiB. Luau bundled
-source is at most 512 KiB; its tracked allocator limit is 4 MiB within guest memory.
+source is at most 512 KiB; its tracked allocator limit is 8 MiB within guest memory.
 The executor reserves a static source buffer of this size inside the 32 MiB guest
 memory; compilation runs in guest memory, and the loaded program counts against
-the 4 MiB tracked Luau heap.
+the 8 MiB tracked Luau heap.
+Compiler memory is untracked and shares the 32 MiB guest memory with the tracked heap.
 Compiling a 512 KiB source inside guest memory can peak near 20 MiB, which requires
 the larger guest memory maximum.
 These are preview limits, independent of the planned 128/512 MB ROM sizes.

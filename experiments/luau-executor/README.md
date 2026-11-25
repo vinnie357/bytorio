@@ -67,4 +67,4 @@ Guest linear-memory size is allocated Wasm addressable memory, not resident RAM 
 
 Normal native runs meter Wasm execution: ten million fuel per Odin guest call and 500 million for the Luau executor, to accommodate its compiler/interpreter. These are interruption allowances, not equal language CPU quotas. The additional native unmetered measurements isolate some metering overhead, using trusted fixed inputs. Browser runs have the external Worker watchdog instead of native fuel.
 
-Both guests have a 32 MiB linear-memory maximum. The executor starts with 4 MiB and caps its custom Luau VM heap at 4 MiB; compiler allocations also have to fit inside the overall module limit. Native and browser resource accounting still require product design before these become final console limits.
+Both guests have a 32 MiB linear-memory maximum. The executor starts with 4 MiB and caps its custom Luau VM heap at 8 MiB; compiler allocations also have to fit inside the overall module limit. Native and browser resource accounting still require product design before these become final console limits.
