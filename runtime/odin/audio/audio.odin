@@ -9,6 +9,7 @@ import "core:math"
 PAGE_COUNT :: w.maxAudioSnapshotBytes / (w.audioPageFrames * 4)
 DONE_CAPACITY :: w.maxAudioDoneRecords
 NO_VOICE :: max(u32)
+STREAM_TIME :: u32(1)
 Command :: struct {
     at, order:                                          u64,
     op, id, lease, page, frames, channels, source_rate: u32,
@@ -68,9 +69,10 @@ Bus :: struct {
     effects:           Synth,
 }
 Chunk :: struct {
-    first, end: u64,
-    lease:      u32,
-    data:       []f32,
+    stream_time: bool,
+    first, end:  u64,
+    lease:       u32,
+    data:        []f32,
 }
 Stream :: struct {
     ended:  bool,
@@ -340,6 +342,12 @@ pop :: proc(e: ^Engine) -> Command {
     }
     return result
 }
+uses_stream_time :: proc(c: Command) -> bool {
+    return(
+        (c.op == w.op_audio_stream_write || c.op == w.op_audio_stream_end) &&
+        c.parameter == STREAM_TIME \
+    )
+}
 consume :: proc(e: ^Engine) {
     tail, head := e.tail, load(&e.head)
     for tail != head {
@@ -347,7 +355,7 @@ consume :: proc(e: ^Engine) {
         e.simulation_frame = max(e.simulation_frame, batch.simulation_frame)
         for command in batch.commands[:batch.count] {
             c := command
-            if c.op == w.op_audio_stream_write || c.op == w.op_audio_stream_end {
+            if uses_stream_time(c) {
                 c.at += e.stream_shift
             }
             push(e, c)
@@ -481,11 +489,14 @@ apply :: proc(e: ^Engine, c: Command) {
         if c.at < e.frame || !s.live || s.id != c.resource || s.count == w.maxStreamChunks {
             e.rejected_local += 1; finish(e, c.lease, NO_VOICE, 0); break
         }
+        // Only decoder feeds use continuous stream time; game PCM timestamps are engine frames.
+        shift := e.stream_shift if uses_stream_time(c) else 0
         s.chunks[s.count] = {
-            first = c.at - e.stream_shift,
-            end   = c.at - e.stream_shift + u64(c.frames),
-            lease = c.lease,
-            data  = e.pool[int(c.page) * w.audioPageFrames:][:int(c.frames * 2)],
+            stream_time = uses_stream_time(c),
+            first       = c.at - shift,
+            end         = c.at - shift + u64(c.frames),
+            lease       = c.lease,
+            data        = e.pool[int(c.page) * w.audioPageFrames:][:int(c.frames * 2)],
         }
         s.count += 1
     }
@@ -498,7 +509,9 @@ logical_frame :: proc(e: ^Engine) -> [2]f32 {
     // Stream chunks are ordered by event time; consume elapsed chunks even if no
     // voice currently reads that stream, so silence never defers stale PCM.
     for &s in e.streams {
-        for s.count > 0 && s.chunks[0].end <= stream_frame {
+        for s.count > 0 {
+            frame := stream_frame if s.chunks[0].stream_time else e.frame
+            if s.chunks[0].end > frame { break }
             finish(e, s.chunks[0].lease, NO_VOICE, 0)
             for i in 1 ..< s.count { s.chunks[i - 1] = s.chunks[i] }
             s.count -= 1
@@ -539,12 +552,13 @@ logical_frame :: proc(e: ^Engine) -> [2]f32 {
             found := false
             for &s in e.streams {
                 if !s.live || s.id != v.resource { continue }
-                if s.count > 0 &&
-                   s.chunks[0].first <= stream_frame &&
-                   stream_frame < s.chunks[0].end {
-                    at := int(stream_frame - s.chunks[0].first) * 2
-                    value = {f64(s.chunks[0].data[at]), f64(s.chunks[0].data[at + 1])}
-                    found = true
+                if s.count > 0 {
+                    frame := stream_frame if s.chunks[0].stream_time else e.frame
+                    if s.chunks[0].first <= frame && frame < s.chunks[0].end {
+                        at := int(frame - s.chunks[0].first) * 2
+                        value = {f64(s.chunks[0].data[at]), f64(s.chunks[0].data[at + 1])}
+                        found = true
+                    }
                 }
                 break
             }
@@ -593,7 +607,7 @@ render :: proc(e: ^Engine, output: []f32, rate: u32 = w.audioRate) {
         // Stream time stays continuous while simulation time jumps to anchor timed voices.
         changed := false
         for &c in e.events[:e.event_count] {
-            if c.op == w.op_audio_stream_write || c.op == w.op_audio_stream_end {
+            if uses_stream_time(c) {
                 c.at += delta
                 changed = true
             }

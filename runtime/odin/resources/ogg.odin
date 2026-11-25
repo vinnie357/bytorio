@@ -162,14 +162,15 @@ ogg_feed :: proc(r: ^Registry, index, id: u32, at: u64, pcm: []f32) -> bool {
         lease, page, reserved := audio.snapshot(&transaction, data)
         if !reserved { return false }
         if !audio.append(&transaction, {
-            op       = w.op_audio_stream_write,
-            id       = index,
-            resource = id,
-            at       = at,
-            frames   = frames,
-            channels = 2,
-            lease    = lease,
-            page     = page,
+            op        = w.op_audio_stream_write,
+            parameter = audio.STREAM_TIME,
+            id        = index,
+            resource  = id,
+            at        = at,
+            frames    = frames,
+            channels  = 2,
+            lease     = lease,
+            page      = page,
         }) {
             audio.release_lease(r.audio, lease); return false
         }
@@ -178,10 +179,13 @@ ogg_feed :: proc(r: ^Registry, index, id: u32, at: u64, pcm: []f32) -> bool {
     ogg_advance(&next, u64(frames))
     next.next_frame += u64(frames)
     if next.loop_end == 0 && next.cursor == next.frames {
-        if !audio.append(
-            &transaction,
-            {op = w.op_audio_stream_end, id = index, resource = id, at = next.next_frame},
-        ) { return false }
+        if !audio.append(&transaction, {
+            op        = w.op_audio_stream_end,
+            id        = index,
+            resource  = id,
+            at        = next.next_frame,
+            parameter = audio.STREAM_TIME,
+        }) { return false }
         next.ended = true
     }
     transaction.batch.simulation_frame = r.tick * w.audioFramesPerTick

@@ -68,7 +68,12 @@ decode :: proc(b: []u8) -> Command {
 }
 valid_command :: proc(c: Command) -> bool {
     if c.op == w.op_audio_stream_end {
-        return c.id < w.maxStreams && c.lease == 0 && c.at <= w.audioMaxExactFrame
+        return(
+            c.id < w.maxStreams &&
+            c.lease == 0 &&
+            c.at <= w.audioMaxExactFrame &&
+            c.parameter <= STREAM_TIME \
+        )
     }
     if c.op >=
        w.op_audio_wavetable { return c.at <= w.audioMaxExactFrame && c.ramp <= w.audioHorizonFrames && valid_synthesis_command(c) }
@@ -129,6 +134,7 @@ valid_command :: proc(c: Command) -> bool {
     case w.op_audio_stream_write:
         return(
             c.id < w.maxStreams &&
+            c.parameter <= STREAM_TIME &&
             c.lease > 0 &&
             c.channels == 2 &&
             c.frames > 0 &&
