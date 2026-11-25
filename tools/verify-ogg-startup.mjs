@@ -56,7 +56,13 @@ const server = createServer(async (request, response) => {
     if (name === "vorbis.wasm") {
       const transfer = { mode, requested: Date.now(), delivered: null, bytes: bytes.length };
       transfers.push(transfer);
-      await new Promise((accept) => setTimeout(accept, 350));
+      const deadline = transfer.requested + 350;
+      // Windows timers can wake before Date.now() reaches the asserted deadline.
+      let remaining = deadline - Date.now();
+      while (remaining > 0) {
+        await new Promise((accept) => setTimeout(accept, remaining));
+        remaining = deadline - Date.now();
+      }
       transfer.delivered = Date.now();
     }
     const types = { ".html": "text/html", ".js": "text/javascript", ".wasm": "application/wasm" };
