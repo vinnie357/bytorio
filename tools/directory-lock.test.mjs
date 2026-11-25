@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, utimesSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { test } from "node:test";
@@ -76,9 +76,15 @@ try {
 }
 Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 120);
 rmSync(${JSON.stringify(inside)}, { force: true });`;
-  return new Promise((done) => {
+  return new Promise((done, reject) => {
     const child = spawn(process.execPath, checkedNodeArgs(["--input-type=module", "-e", script]));
-    child.on("close", done);
+    let stderr = "";
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (text) => {
+      stderr += text;
+    });
+    child.on("error", reject);
+    child.on("close", (code) => done({ code, stderr }));
   });
 }
 
@@ -96,12 +102,97 @@ for (const waiters of [2, 8]) {
         const old = new Date(Date.now() - 60000);
         utimesSync(lock, old, old);
       }
-      const codes = await Promise.all(
+      const results = await Promise.all(
         Array.from({ length: waiters }, () => waiter(lock, join(root, "inside"), violations)),
       );
-      assert.deepEqual(codes, Array(waiters).fill(0));
+      const diagnostics = results
+        .map(({ code, stderr }, index) =>
+          code === 0 ? "" : `waiter ${index} exited ${code}:\n${stderr}`,
+        )
+        .filter(Boolean)
+        .join("\n");
+      assert.deepEqual(
+        results.map(({ code }) => code),
+        Array(waiters).fill(0),
+        `round ${round}:\n${diagnostics}`,
+      );
       assert.equal(existsSync(violations), false, `round ${round}: two holders at once`);
       assert.equal(existsSync(lock), false, "the last holder releases the lock");
     }
+  });
+}
+
+function injectedMkdir(t, target, codes, assertions, { persistent = false } = {}) {
+  const root = mkdtempSync(join(tmpdir(), "directory-lock-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const lock = join(root, ".lock");
+  if (target === "gate") {
+    mkdirSync(lock);
+    writeFileSync(join(lock, "pid"), "2147483646");
+  }
+  const directory = target === "gate" ? `${lock}.takeover` : lock;
+  const script = `import assert from "node:assert/strict";
+import * as fs from "node:fs/promises";
+import { join } from "node:path";
+import { acquireLock } from ${JSON.stringify(module)};
+const lock = ${JSON.stringify(lock)};
+const directory = ${JSON.stringify(directory)};
+const failures = ${JSON.stringify(codes)}.map(code => Object.assign(new Error("injected mkdir " + code), { code }));
+let calls = 0;
+const injectedFs = {
+  ...fs,
+  async mkdir(path, ...args) {
+    if (path === directory) {
+      calls++;
+      const error = ${persistent ? "failures[0]" : "failures[calls - 1]"};
+      if (error) throw error;
+    }
+    return fs.mkdir(path, ...args);
+  },
+};
+${assertions}`;
+  const result = spawnSync(
+    process.execPath,
+    checkedNodeArgs(["--input-type=module", "-e", script]),
+    { encoding: "utf8", timeout: 3000 },
+  );
+  assert.equal(
+    result.status,
+    0,
+    `${target} mkdir child failed: ${result.error?.message || ""}\n${result.stderr}`,
+  );
+}
+
+for (const target of ["lock", "gate"]) {
+  test(`${target} mkdir retries EPERM, EACCES and EBUSY before holding the lock`, (t) => {
+    injectedMkdir(
+      t,
+      target,
+      ["EPERM", "EACCES", "EBUSY"],
+      `await acquireLock(lock, { timeoutMs: 2000, fs: injectedFs });
+assert.equal(calls, 4, "the injected mkdir must retry each transient error and then succeed");
+assert.equal(await fs.readFile(join(lock, "pid"), "utf8"), String(process.pid));`,
+    );
+  });
+
+  test(`${target} mkdir does not retry ENOTDIR`, (t) => {
+    injectedMkdir(
+      t,
+      target,
+      ["ENOTDIR"],
+      `await assert.rejects(acquireLock(lock, { timeoutMs: 1000, fs: injectedFs }), error => error === failures[0]);
+assert.equal(calls, 1);`,
+    );
+  });
+
+  test(`${target} mkdir persistent EPERM times out`, (t) => {
+    injectedMkdir(
+      t,
+      target,
+      ["EPERM"],
+      `await assert.rejects(acquireLock(lock, { timeoutMs: 50, fs: injectedFs }), /Timed out waiting for/);
+assert.ok(calls >= 1, "the injected persistent error must be encountered before timing out");`,
+      { persistent: true },
+    );
   });
 }
