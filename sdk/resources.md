@@ -126,7 +126,7 @@ be chunked. Texture axes are 1..1024; actual buffers still must fit guest limits
 
 The browser runtime now has an 80 MiB linear-memory ceiling to accommodate the
 resource quota plus fixed runtime storage and allocation overhead. **Guest memory
-remains capped at 8 MiB and the tracked Luau heap at 4 MiB.** The Luau executor's
+remains capped at 32 MiB and the tracked Luau heap at 8 MiB.** The Luau executor's
 initial memory is 4 MiB for its bounded transport arena. Native
 and browser use the same registry and charging rules. Faults stop the session;
 worker errors explicitly release resources and discard the guest.

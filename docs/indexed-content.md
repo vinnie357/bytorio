@@ -3,8 +3,9 @@
 Design rationale: [immutable content separate from guest memory](adr/0007-separate-cartridge-content-from-guest-memory.md).
 
 Cartridges may package immutable byte blobs outside their executable module.
-The guest keeps its existing 1 MiB Wasm module and 8 MiB memory limits; the Luau
-source and heap limits, display modes and profile tuples are unchanged.
+The guest has a 1 MiB Wasm module limit and a 32 MiB memory limit.
+Content packaging does not affect the Luau source and heap limits, display modes
+or profile tuples.
 
 Declare portable project-relative files in `console.json`:
 

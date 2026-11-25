@@ -7,6 +7,7 @@ import { chromium } from "playwright";
 import { createTextInputSession } from "../runtime/odin/web/text-session.js";
 import { serve } from "./serve.mjs";
 import { repo } from "./toolchain.mjs";
+import { nativeTestArgs } from "./native-test-args.mjs";
 
 const encoder = new TextEncoder();
 function packet(value = "", { id = 7, maximum = 16, start, end, ...overrides } = {}) {
@@ -45,6 +46,15 @@ function setup() {
   };
   return { memory, session, notifications, configure };
 }
+
+test("native SDL suite serializes tests to avoid the global-state race", () => {
+  const args = nativeTestArgs({ dependencies: "deps", output: "native-tests.exe" });
+  assert.deepEqual(
+    args.filter((arg) => arg.startsWith("-define:ODIN_TEST_THREADS=")),
+    ["-define:ODIN_TEST_THREADS=1"],
+    "SDL global-state race: parallel Init/Quit can tear down another native test's subsystem",
+  );
+});
 
 test("text configuration owns UTF8, reads once per tick and retains the field", () => {
   const { memory, session, configure } = setup();

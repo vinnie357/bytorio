@@ -46,12 +46,12 @@ export const RESOURCE_FEATURES = 7;
 export const RESOURCE_PROTOCOL = 4;
 export const FRAME_BYTES = 40;
 export const MAX_GAME_BYTES = 1048576;
-export const MAX_MEMORY_BYTES = 8388608;
+export const MAX_MEMORY_BYTES = 33554432;
 export const MAX_COMMANDS = 16384;
 export const MAX_TEXT_BYTES = 16384;
 export const MAX_GRAPHICS_BYTES = 66512;
-export const MAX_LUAU_SOURCE_BYTES = 262144;
-export const MAX_LUAU_HEAP_BYTES = 4194304;
+export const MAX_LUAU_SOURCE_BYTES = 524288;
+export const MAX_LUAU_HEAP_BYTES = 8388608;
 export const U32_MAX = 4294967295;
 export const U32_MODULUS = 4294967296;
 export const WASM_PAGE_BYTES = 65536;
@@ -248,6 +248,8 @@ export const resourceSchema = Object.freeze({
   maxAudioEvents: 4096,
   maxAudioBatches: 8,
   audioLeadFrames: 2400,
+  audioPacketHeaderBytes: 24,
+  audioPacketSimulationFrameOffset: 16,
   audioHorizonFrames: 96000,
   maxAudioSnapshotBytes: 8388608,
   audioPageFrames: 256,
@@ -385,8 +387,7 @@ export const resourceSchema = Object.freeze({
   mailboxCapacity: 1049168,
   maxAudioLeases: 5464,
   maxAudioDoneRecords: 9576,
-  audioPacketHeaderBytes: 16,
   audioEventBytes: 96,
-  maxAudioPacketBytes: 8781840,
+  maxAudioPacketBytes: 8781848,
   maxAudioFeedbackBytes: 306512,
 });

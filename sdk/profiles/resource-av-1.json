@@ -11,8 +11,8 @@
     "schema": "../resource-protocol.json"
   },
   "targets": {
-    "guestMemoryBytes": 8388608,
-    "luauHeapBytes": 4194304,
+    "guestMemoryBytes": 33554432,
+    "luauHeapBytes": 8388608,
     "resourceSlots": 1024,
     "runtimeResourceBytes": 67108864,
     "commandsPerCommit": 16384,

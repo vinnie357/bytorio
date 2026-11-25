@@ -387,7 +387,13 @@ load :: proc(
        wasmtime_memorytype_is64(memory_type) ||
        wasmtime_memorytype_isshared(memory_type) ||
        wasmtime_memorytype_page_size(memory_type) != abi.WASM_PAGE_BYTES {
-        return fail(game, "game memory must declare an 8 MiB maximum or less")
+        return fail(
+            game,
+            fmt.tprintf(
+                "game memory must declare a %d MiB maximum or less",
+                abi.MAX_MEMORY_BYTES / (1024 * 1024),
+            ),
+        )
     }
     extension: Extern
     if wasmtime_instance_export_get(
@@ -421,7 +427,7 @@ load :: proc(
     }
     initialize_start := time.tick_now()
     if game.has_source {
-        if len(source) > 256 * 1024 {
+        if len(source) > abi.MAX_LUAU_SOURCE_BYTES {
 
             return fail(game, "Luau source exceeds prototype limit")
         }

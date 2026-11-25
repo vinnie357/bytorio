@@ -9,6 +9,7 @@ import "core:math"
 PAGE_COUNT :: w.maxAudioSnapshotBytes / (w.audioPageFrames * 4)
 DONE_CAPACITY :: w.maxAudioDoneRecords
 NO_VOICE :: max(u32)
+STREAM_TIME :: u32(1)
 Command :: struct {
     at, order:                                          u64,
     op, id, lease, page, frames, channels, source_rate: u32,
@@ -17,8 +18,9 @@ Command :: struct {
     parameter, ramp:                                    u32,
 }
 Batch :: struct {
-    count:    u32,
-    commands: [w.maxAudioEvents]Command,
+    simulation_frame: u64,
+    count:            u32,
+    commands:         [w.maxAudioEvents]Command,
 }
 Lease :: struct {
     page, pages: u32,
@@ -67,9 +69,10 @@ Bus :: struct {
     effects:           Synth,
 }
 Chunk :: struct {
-    first, end: u64,
-    lease:      u32,
-    data:       []f32,
+    stream_time: bool,
+    first, end:  u64,
+    lease:       u32,
+    data:        []f32,
 }
 Stream :: struct {
     ended:  bool,
@@ -95,6 +98,8 @@ Engine :: struct {
     completion_overflow:                                                                  u64,
     // Atomic renderer publications; never inspect mutable DSP state on the producer.
     published_frame, processed, late, underruns, rejected_writes, completed:              u64,
+    published_stream_frame:                                                               u64,
+    published_leading:                                                                    u32,
     pause_request, epoch:                                                                 u32,
     // Renderer fields.
     events:                                                                               [w.maxAudioEvents]Command,
@@ -106,6 +111,8 @@ Engine :: struct {
     graphs:                                                                               [w.maxInstruments]Graph,
     frame, processed_local, late_local, underruns_local, rejected_local, completed_local: u64,
     lead_remaining:                                                                       u32,
+    simulation_frame:                                                                     u64,
+    stream_shift:                                                                         u64,
     paused:                                                                               bool,
     fade:                                                                                 Ramp,
     lead_phase:                                                                           f64,
@@ -154,6 +161,7 @@ create :: proc() -> ^Engine {
         target = 1,
     }
     e.lead_remaining = w.audioLeadFrames
+    e.published_leading = 1
     e.epoch = 1
     return e
 }
@@ -198,6 +206,7 @@ begin :: proc(e: ^Engine) -> (Transaction, bool) {
     if producer_batches_available(e) == 0 { return {}, false }
     batch := &e.batches[head % w.maxAudioBatches]
     batch.count = 0
+    batch.simulation_frame = 0
     return {engine = e, batch = batch, model = e.model, head = head, active = true}, true
 }
 abort :: proc(t: ^Transaction) {
@@ -312,11 +321,9 @@ push :: proc(e: ^Engine, command: Command) {
     }
     e.events[at] = c
 }
-pop :: proc(e: ^Engine) -> Command {
-    result := e.events[0]
-    e.event_count -= 1
-    last := e.events[e.event_count]
-    at := 0
+sift_down :: proc(e: ^Engine, start: int) {
+    last := e.events[start]
+    at := start
     for at * 2 + 1 < e.event_count {
         child := at * 2 + 1
         if child + 1 < e.event_count && before(e.events[child + 1], e.events[child]) { child += 1 }
@@ -325,13 +332,34 @@ pop :: proc(e: ^Engine) -> Command {
         at = child
     }
     e.events[at] = last
+}
+pop :: proc(e: ^Engine) -> Command {
+    result := e.events[0]
+    e.event_count -= 1
+    if e.event_count > 0 {
+        e.events[0] = e.events[e.event_count]
+        sift_down(e, 0)
+    }
     return result
+}
+uses_stream_time :: proc(c: Command) -> bool {
+    return(
+        (c.op == w.op_audio_stream_write || c.op == w.op_audio_stream_end) &&
+        c.parameter == STREAM_TIME \
+    )
 }
 consume :: proc(e: ^Engine) {
     tail, head := e.tail, load(&e.head)
     for tail != head {
         batch := &e.batches[tail % w.maxAudioBatches]
-        for c in batch.commands[:batch.count] { push(e, c) }
+        e.simulation_frame = max(e.simulation_frame, batch.simulation_frame)
+        for command in batch.commands[:batch.count] {
+            c := command
+            if uses_stream_time(c) {
+                c.at += e.stream_shift
+            }
+            push(e, c)
+        }
         tail += 1
     }
     store(&e.tail, tail)
@@ -461,11 +489,14 @@ apply :: proc(e: ^Engine, c: Command) {
         if c.at < e.frame || !s.live || s.id != c.resource || s.count == w.maxStreamChunks {
             e.rejected_local += 1; finish(e, c.lease, NO_VOICE, 0); break
         }
+        // Only decoder feeds use continuous stream time; game PCM timestamps are engine frames.
+        shift := e.stream_shift if uses_stream_time(c) else 0
         s.chunks[s.count] = {
-            first = c.at,
-            end   = c.at + u64(c.frames),
-            lease = c.lease,
-            data  = e.pool[int(c.page) * w.audioPageFrames:][:int(c.frames * 2)],
+            stream_time = uses_stream_time(c),
+            first       = c.at - shift,
+            end         = c.at - shift + u64(c.frames),
+            lease       = c.lease,
+            data        = e.pool[int(c.page) * w.audioPageFrames:][:int(c.frames * 2)],
         }
         s.count += 1
     }
@@ -474,10 +505,13 @@ logical_frame :: proc(e: ^Engine) -> [2]f32 {
     for e.event_count > 0 && e.events[0].at <= e.frame {
         apply(e, pop(e)); e.processed_local += 1
     }
+    stream_frame := e.frame - e.stream_shift
     // Stream chunks are ordered by event time; consume elapsed chunks even if no
     // voice currently reads that stream, so silence never defers stale PCM.
     for &s in e.streams {
-        for s.count > 0 && s.chunks[0].end <= e.frame {
+        for s.count > 0 {
+            frame := stream_frame if s.chunks[0].stream_time else e.frame
+            if s.chunks[0].end > frame { break }
             finish(e, s.chunks[0].lease, NO_VOICE, 0)
             for i in 1 ..< s.count { s.chunks[i - 1] = s.chunks[i] }
             s.count -= 1
@@ -518,10 +552,13 @@ logical_frame :: proc(e: ^Engine) -> [2]f32 {
             found := false
             for &s in e.streams {
                 if !s.live || s.id != v.resource { continue }
-                if s.count > 0 && s.chunks[0].first <= e.frame && e.frame < s.chunks[0].end {
-                    at := int(e.frame - s.chunks[0].first) * 2
-                    value = {f64(s.chunks[0].data[at]), f64(s.chunks[0].data[at + 1])}
-                    found = true
+                if s.count > 0 {
+                    frame := stream_frame if s.chunks[0].stream_time else e.frame
+                    if s.chunks[0].first <= frame && frame < s.chunks[0].end {
+                        at := int(frame - s.chunks[0].first) * 2
+                        value = {f64(s.chunks[0].data[at]), f64(s.chunks[0].data[at + 1])}
+                        found = true
+                    }
                 }
                 break
             }
@@ -565,6 +602,25 @@ render :: proc(e: ^Engine, output: []f32, rate: u32 = w.audioRate) {
         if !requested { e.lead_remaining = w.audioLeadFrames; e.lead_phase = 0 }
         set_ramp(&e.fade, 0 if requested else 1, w.audioPauseFadeFrames)
     }
+    if e.lead_remaining > 0 && e.simulation_frame > e.frame {
+        delta := e.simulation_frame - e.frame
+        // Stream time stays continuous while simulation time jumps to anchor timed voices.
+        changed := false
+        for &c in e.events[:e.event_count] {
+            if uses_stream_time(c) {
+                c.at += delta
+                changed = true
+            }
+        }
+        if changed {
+            for parent := e.event_count / 2; parent > 0; parent -= 1 {
+                sift_down(e, parent - 1)
+            }
+        }
+        e.stream_shift += delta
+        e.frame = e.simulation_frame
+        e.device_ready = false
+    }
     for i in 0 ..< len(output) / 2 {
         pair: [2]f32
         if e.lead_remaining > 0 {
@@ -592,6 +648,8 @@ render :: proc(e: ^Engine, output: []f32, rate: u32 = w.audioRate) {
         output[i * 2] = pair[0]; output[i * 2 + 1] = pair[1]
     }
     store(&e.published_frame, e.frame)
+    store(&e.published_stream_frame, e.frame - e.stream_shift)
+    store(&e.published_leading, u32(e.lead_remaining > 0))
     store(&e.processed, e.processed_local)
     store(&e.late, e.late_local)
     store(&e.underruns, e.underruns_local)

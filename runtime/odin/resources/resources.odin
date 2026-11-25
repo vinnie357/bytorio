@@ -585,6 +585,7 @@ submit :: proc(
     r.ogg, r.ogg_reserved = txn.ogg, txn.ogg_reserved
     if r.ogg_reserved { r.bytes += w.maxOggDecoderBytes }
     if r.audio != nil { r.bytes += audio.RESERVED_BYTES }
+    if txn.audio.active { txn.audio.batch.simulation_frame = tick * w.audioFramesPerTick }
     audio.publish(&txn.audio)
     for slot, i in shadow {
         if raw_data(slot.data) != raw_data(r.slots[i].data) {

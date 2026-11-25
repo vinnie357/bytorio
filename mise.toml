@@ -176,6 +176,11 @@ run = "node --test tools/player-build-concurrent.test.mjs"
 description = "Verify the Luau bundler strips comments without moving a line"
 run = "node --test tools/bundle-strip.test.mjs tools/sdk/assets-content.test.mjs"
 
+[tasks."test:luau-source-limit"]
+description = "Verify the 512 KiB Luau source limit"
+depends = ["build:odin", "deps:luau"]
+run = "node --test tools/luau-source-limit.test.mjs"
+
 [tasks."test:assets-content"]
 description = "Verify graphics content bundling and manifest validation"
 run = "node --test tools/sdk/assets-content.test.mjs"
@@ -290,6 +295,7 @@ run = [
   {task = "test:build-tasks"},
   {task = "test:extract"},
   {task = "test:bundle-strip"},
+  {task = "test:luau-source-limit"},
   {task = "test:player-build-concurrent"},
   {task = "test:player-export"},
   {task = "test:format-cache"},
@@ -330,12 +336,12 @@ description = "Run validation with retained logs and source fingerprints"
 run = "node tools/validate.mjs"
 
 [tasks."test:validation"]
-description = "Test validation failure reporting, deadlines and source tracking"
-run = "node --test tools/validation-runner.test.mjs tools/frame-clock.test.mjs tools/odin-unit-tests.test.mjs tools/browser-timing.test.mjs"
+description = "Test validation reporting, source tracking and deterministic sRGB generation"
+run = "node --test tools/validation-runner.test.mjs tools/command-timing.test.mjs tools/frame-clock.test.mjs tools/odin-unit-tests.test.mjs tools/browser-timing.test.mjs tools/srgb-table.test.mjs"
 
 [tasks."test:player-export"]
 description = "Verify complete player exports and missing-dependency failures"
-run = "node --test tools/player-export.test.mjs"
+run = "node --test tools/atomic-file.test.mjs tools/player-export.test.mjs"
 
 [tasks."test:format-cache"]
 description = "Verify formatter cache hits, concurrent callers and stale locks"

@@ -22,8 +22,14 @@ import { repo } from "./toolchain.mjs";
 const mise = process.env.MISE_BIN || "mise";
 
 function execute(args, cwd = repo, env = process.env) {
-  const result = spawnSync(mise, args, { cwd, env, encoding: "utf8", timeout: 30000 });
-  assert.ifError(result.error);
+  // Hang guard sized for slow Windows runners.
+  const timeoutMs = 120000;
+  const result = spawnSync(mise, args, { cwd, env, encoding: "utf8", timeout: timeoutMs });
+  assert.equal(
+    result.error,
+    undefined,
+    `${mise} ${JSON.stringify(args)} failed (timeout ${timeoutMs} ms): ${result.error?.message}`,
+  );
   assert.equal(result.status, 0, result.stderr + result.stdout);
   return result.stdout;
 }

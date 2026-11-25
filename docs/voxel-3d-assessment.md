@@ -77,8 +77,8 @@ for the first experiment.
 ## Memory and packaging constraints
 
 The published [resource profile](resource-profile.md) and
-[machine-readable limits](../sdk/profiles/resource-av-1.json) remain unchanged.
-They currently allow 8 MiB guest memory, a 4 MiB Luau heap, a 64 MiB resource
+[machine-readable limits](../sdk/profiles/resource-av-1.json) define the current quotas.
+They currently allow 32 MiB guest memory, an 8 MiB Luau heap, a 64 MiB resource
 budget and 1 MiB payload per commit. The fixed audio/control reservation is
 55,463,952 bytes when that path is activated, leaving 11,644,912 bytes (about
 11.1 MiB) of resource headroom before other allocations.

@@ -461,6 +461,9 @@ EMSCRIPTEN_KEEPALIVE void game_init() {
         fail("cannot allocate Luau VM");
         return;
     }
+    lua_gc(state, LUA_GCSETGOAL, 125);
+    // Churn p99: 600=324us vs 800=375us; 600 peak 3948608B < 4243584B bound.
+    lua_gc(state, LUA_GCSETSTEPMUL, 600);
     luaL_openlibs(state);
     const luaL_Reg api[] = {{"profile",
                              [](lua_State* L) -> int {

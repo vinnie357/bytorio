@@ -6,6 +6,7 @@ import { once } from "node:events";
 import { timedSpawnSync as spawnSync } from "./command-timing.mjs";
 import { tool, dependencyRoot, nativeLinkerFlags, nativePlayer } from "./toolchain.mjs";
 import { odinUnitTests } from "./odin-unit-tests.mjs";
+import { nativeTestArgs } from "./native-test-args.mjs";
 import { createProject, buildProject, requireNativePlayer } from "./sdk/project.mjs";
 import { chromium } from "./browser-timing.mjs";
 import { serve } from "./serve.mjs";
@@ -17,14 +18,11 @@ console.log(odinUnitTests("tests/sdk/input", resolve(root, "input-tests.exe")));
 const nativeTest = resolve("build/odin-player/native/text-input-tests.exe");
 const unit = spawnSync(
   tool("odin"),
-  [
-    "test",
-    "runtime/odin/native",
-    "-o:none",
-    `-collection:deps=${dependencyRoot()}`,
-    `-out:${nativeTest}`,
-    ...nativeLinkerFlags({ harness: true }),
-  ],
+  nativeTestArgs({
+    dependencies: dependencyRoot(),
+    output: nativeTest,
+    flags: nativeLinkerFlags({ harness: true }),
+  }),
   {
     encoding: "utf8",
     timeout: 120000,
