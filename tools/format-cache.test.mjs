@@ -17,6 +17,7 @@ import { join } from "node:path";
 import { setImmediate } from "node:timers/promises";
 import { test } from "node:test";
 import { formatCacheKey, formatSource } from "./code-tools.mjs";
+import * as commandTiming from "./command-timing.mjs";
 import { repo, tool } from "./toolchain.mjs";
 
 const source = Array.from(
@@ -60,7 +61,7 @@ function formatterCalls(path, name) {
       .split("\n")
       .filter(Boolean)
       .map((line) => JSON.parse(line))
-      .filter(({ executable }) => executable.endsWith(name)).length;
+      .filter(({ executable }) => commandTiming.executableIs(executable, name)).length;
   } catch (error) {
     if (error.code === "ENOENT") {
       return 0;

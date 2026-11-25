@@ -337,7 +337,7 @@ run = "node tools/validate.mjs"
 
 [tasks."test:validation"]
 description = "Test validation reporting, source tracking and deterministic sRGB generation"
-run = "node --test tools/validation-runner.test.mjs tools/frame-clock.test.mjs tools/odin-unit-tests.test.mjs tools/browser-timing.test.mjs tools/srgb-table.test.mjs"
+run = "node --test tools/validation-runner.test.mjs tools/command-timing.test.mjs tools/frame-clock.test.mjs tools/odin-unit-tests.test.mjs tools/browser-timing.test.mjs tools/srgb-table.test.mjs"
 
 [tasks."test:player-export"]
 description = "Verify complete player exports and missing-dependency failures"
