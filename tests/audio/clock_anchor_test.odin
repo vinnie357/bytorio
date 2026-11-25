@@ -11,6 +11,11 @@ import "core:testing"
 
 @(test)
 simulation_clock_anchors_start_and_resume :: proc(test: ^testing.T) {
+    poison: Poisoning_Allocator
+    allocator := context.allocator
+    context.allocator = poisoning_allocator(&poison, allocator)
+    defer poisoning_allocator_destroy(&poison)
+    defer context.allocator = allocator
     sync.mutex_lock(&sdk_mutex)
     defer sync.mutex_unlock(&sdk_mutex)
     transports := [2]bool{false, true}
@@ -102,6 +107,11 @@ publish_clock :: proc(test: ^testing.T, producer: ^mixer.Engine, frame, at: u64)
 
 @(test)
 lead_tracks_delivered_clock_without_rewinding_or_skipping_audible_pcm :: proc(test: ^testing.T) {
+    poison: Poisoning_Allocator
+    allocator := context.allocator
+    context.allocator = poisoning_allocator(&poison, allocator)
+    defer poisoning_allocator_destroy(&poison)
+    defer context.allocator = allocator
     transports := [2]bool{false, true}
     for serialized in transports {
         producer := tiny(test)
@@ -146,6 +156,11 @@ lead_tracks_delivered_clock_without_rewinding_or_skipping_audible_pcm :: proc(te
 
 @(test)
 serialized_clock_is_exact_and_invalid_clock_rolls_back :: proc(test: ^testing.T) {
+    poison: Poisoning_Allocator
+    allocator := context.allocator
+    context.allocator = poisoning_allocator(&poison, allocator)
+    defer poisoning_allocator_destroy(&poison)
+    defer context.allocator = allocator
     producer := mixer.create()
     consumer := mixer.create()
     defer mixer.close(producer)
