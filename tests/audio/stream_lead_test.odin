@@ -107,4 +107,74 @@ ogg_feed_clock_during_resume_preserves_buffered_stream_pcm :: proc(test: ^testin
         timed_sample,
         "One-shot starts 128 frames after the simulation anchor and lasts 32 frames",
     )
+
+    request := resources.ogg_request(&registry, 0)
+    testing.expect_value(test, request[2], u32(2 * w.oggChunkFrames))
+    testing.expect_value(test, request[4], u32(2 * w.oggChunkFrames))
+    for &value in pcm { value = 0.5 }
+    if !testing.expect(
+        test,
+        resources.ogg_feed(&registry, 0, id, registry.ogg[0].next_frame, pcm[:]),
+    ) { return }
+    following: [w.oggChunkFrames * 2]f32
+    mixer.render(engine, following[:])
+    testing.expect_value(test, engine.underruns, u64(0))
+    continuous = true
+    for value in following { continuous = continuous && (value == 0.125 || value == 0.5) }
+    testing.expect(
+        test,
+        continuous,
+        "Post-jump Ogg requests preserve the decoder cursor without a gap",
+    )
+    testing.expect_value(test, following[len(following) - 1], f32(0.5))
+}
+
+@(test)
+ogg_created_before_lead_jump_feeds_before_start_is_applied :: proc(test: ^testing.T) {
+    poison: Poisoning_Allocator
+    allocator := context.allocator
+    context.allocator = poisoning_allocator(&poison, allocator)
+    defer poisoning_allocator_destroy(&poison)
+    defer context.allocator = allocator
+    sync.mutex_lock(&sdk_mutex)
+    defer sync.mutex_unlock(&sdk_mutex)
+    registry: resources.Registry
+    defer resources.close(&registry)
+    if !testing.expect(test, resources.reset(&registry, 120, w.oggProtocol)) { return }
+    testing.expect(test, t.configure(120))
+    t.begin(0)
+    if !testing.expect(test, commit(&registry), registry.error) { return }
+    testing.expect(test, t.ack(1))
+    t.begin(1)
+    stream := audio.stream()
+    audio.play_stream(audio.voice(0), stream)
+    if !testing.expect(test, commit(&registry), registry.error) { return }
+    testing.expect(test, t.ack(2))
+    engine := registry.audio
+    id := t.Handle(stream).id
+    // The decoder's first chunk begins at the current stream frame, before DSP activation.
+    registry.ogg[0] = {
+        id     = id,
+        frames = w.maxStreamFrames,
+    }
+    lead: [w.audioLeadFrames * 2]f32
+    mixer.render(engine, lead[:])
+    testing.expect_value(test, engine.published_frame, u64(w.audioFramesPerTick))
+    testing.expect(test, !engine.streams[0].live, "Stream start is still queued at the lead jump")
+    pcm: [w.oggChunkFrames * 2]f32
+    for &value in pcm { value = 0.25 }
+    request := resources.ogg_request(&registry, 0)
+    testing.expect_value(test, request[4], u32(0))
+    if !testing.expect(test, resources.ogg_feed(&registry, 0, id, 0, pcm[:])) { return }
+    output: [512 * 2]f32
+    mixer.render(engine, output[:])
+    testing.expect_value(test, engine.underruns, u64(0))
+    testing.expect_value(test, engine.rejected_writes, u64(0))
+    audible := true
+    for value in output { audible = audible && value == 0.25 }
+    testing.expect(
+        test,
+        audible,
+        "A stream not yet live at the jump still plays its first fed chunk",
+    )
 }
