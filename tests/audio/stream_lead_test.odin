@@ -2,6 +2,11 @@ package audio_test
 
 import mixer "../../runtime/odin/audio"
 import w "../../runtime/odin/resource_protocol"
+import resources "../../runtime/odin/resources"
+import audio "../../sdk/odin/audio"
+import data "../../sdk/odin/data"
+import t "../../sdk/odin/resource"
+import "core:sync"
 import "core:testing"
 
 @(test)
@@ -11,22 +16,32 @@ ogg_feed_clock_during_resume_preserves_buffered_stream_pcm :: proc(test: ^testin
     context.allocator = poisoning_allocator(&poison, allocator)
     defer poisoning_allocator_destroy(&poison)
     defer context.allocator = allocator
-    engine := mixer.create()
-    defer mixer.close(engine)
+    sync.mutex_lock(&sdk_mutex)
+    defer sync.mutex_unlock(&sdk_mutex)
+    registry: resources.Registry
+    defer resources.close(&registry)
+    if !testing.expect(test, resources.reset(&registry, 119, w.oggProtocol)) { return }
+    testing.expect(test, t.configure(119))
+    t.begin(0)
+    stream := audio.stream()
+    audio.play_stream(audio.voice(0), stream)
+    sample_pcm := data.pcm(32, 1)
+    defer data.free_pcm(&sample_pcm)
+    for &value in sample_pcm.samples { value = 0.5 }
+    sample := audio.sample({frames = 32, channels = 1, rate = w.audioRate}, sample_pcm)
+    if !testing.expect(test, commit(&registry), registry.error) { return }
+    testing.expect(test, t.ack(1))
+    engine := registry.audio
     engine.lead_remaining = 0
-
-    initial, ok := mixer.begin(engine)
-    if !testing.expect(test, ok) { return }
-    testing.expect(test, mixer.append(&initial, {op = w.op_audio_stream, id = 0, resource = 101}))
-    _ = queued_pcm(test, &initial, 0, 101, 0, w.oggChunkFrames, 0.25)
-    testing.expect(test, mixer.append(&initial, {
-            op       = w.op_audio_play_stream,
-            id       = 0,
-            resource = 101,
-            gain     = 1,
-            rate     = 1,
-        }))
-    mixer.publish(&initial)
+    id := t.Handle(stream).id
+    // Model an open decoder at the PCM admission seam, as in ogg_admission_test.
+    registry.ogg[0] = {
+        id     = id,
+        frames = w.maxStreamFrames,
+    }
+    pcm: [w.oggChunkFrames * 2]f32
+    for &value in pcm { value = 0.25 }
+    if !testing.expect(test, resources.ogg_feed(&registry, 0, id, 0, pcm[:])) { return }
     warmup: [16]f32
     mixer.render(engine, warmup[:])
     testing.expect_value(test, warmup[0], f32(0.25))
@@ -38,28 +53,58 @@ ogg_feed_clock_during_resume_preserves_buffered_stream_pcm :: proc(test: ^testin
     testing.expect(test, engine.paused)
     if !testing.expect_value(test, engine.streams[0].count, 1) { return }
     testing.expect(test, engine.streams[0].chunks[0].first <= engine.frame)
-    testing.expect(test, engine.frame + 514 < engine.streams[0].chunks[0].end)
+    remaining := engine.streams[0].chunks[0].end - engine.frame
+    if !testing.expect(test, remaining >= 512, "At least 512 frames of chunk 0 remain") { return }
 
-    feed, feed_ok := mixer.begin(engine)
-    if !testing.expect(test, feed_ok) { return }
-    _ = queued_pcm(test, &feed, 0, 101, w.oggChunkFrames, w.oggChunkFrames, 0.25)
-    // Ogg prefetch stamps the simulation clock while PCM stays on the engine timeline.
-    feed.batch.simulation_frame = 54 * w.audioFramesPerTick
-    mixer.publish(&feed)
+    for tick in 1 ..= 54 {
+        t.begin(u64(tick))
+        if tick == 54 {
+            audio.play_sample(audio.voice(1), sample, {at = u64(54 * w.audioFramesPerTick + 128)})
+        }
+        if !testing.expect(test, commit(&registry), registry.error) { return }
+        testing.expect(test, t.ack(u32(tick + 1)))
+    }
+    testing.expect_value(test, registry.tick, u64(54))
+    for &value in pcm { value = 0.125 }
+    if !testing.expect(
+        test,
+        resources.ogg_feed(&registry, 0, id, registry.ogg[0].next_frame, pcm[:]),
+    ) { return }
+    testing.expect_value(test, registry.ogg[0].next_frame, u64(2 * w.oggChunkFrames))
     mixer.pause(engine, false)
     lead: [w.audioLeadFrames * 2]f32
     mixer.render(engine, lead[:])
     silent := true
     for value in lead { silent = silent && value == 0 }
     testing.expect(test, silent)
+    testing.expect_value(test, engine.published_frame, u64(54 * w.audioFramesPerTick))
 
-    output: [512 * 2]f32
+    output: [1280 * 2]f32
     mixer.render(engine, output[:])
     testing.expect_value(test, engine.underruns, u64(0))
-    // Resume fades in over 64 frames; the remainder must be the queued PCM.
-    buffered_pcm := true
-    for value in output[w.audioPauseFadeFrames * 2:] {
-        buffered_pcm = buffered_pcm && value == 0.25
+    first_chunk, second_chunk, continuous, timed_sample := true, true, true, true
+    for frame in w.audioPauseFadeFrames ..< len(output) / 2 {
+        shot: f32 = 0.5 if frame >= 128 && frame < 160 else 0
+        for channel in 0 ..< 2 {
+            value := output[frame * 2 + channel]
+            // Allow the resampler's two prefetched frames at the chunk boundary.
+            if u64(frame) + 2 < remaining {
+                first_chunk = first_chunk && value == 0.25 + shot
+            } else if u64(frame) > remaining + 2 {
+                second_chunk = second_chunk && value == 0.125
+            }
+            continuous = continuous && (value == 0.25 + shot || value == 0.125 + shot)
+            if frame >= 120 && frame < 168 {
+                timed_sample = timed_sample && value - output[120 * 2 + channel] == shot
+            }
+        }
     }
-    testing.expect(test, buffered_pcm, "Buffered Ogg PCM must remain audible after resume lead")
+    testing.expect(test, first_chunk, "Buffered Ogg PCM stays audible after resume lead")
+    testing.expect(test, second_chunk, "The real Ogg feed's next chunk is played")
+    testing.expect(test, continuous, "No PCM gap across the Ogg chunk boundary")
+    testing.expect(
+        test,
+        timed_sample,
+        "One-shot starts 128 frames after the simulation anchor and lasts 32 frames",
+    )
 }
