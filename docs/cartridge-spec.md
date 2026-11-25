@@ -39,7 +39,7 @@ There are no guest OS/WASI capabilities. In addition to `env.sin`, updated playe
 provide the bounded `env.content_size` and `env.content_read` imports described in
 [indexed content](indexed-content.md). The Luau executor imports these functions;
 Odin modules import them only when using the content SDK. Arbitrary imports are
-rejected, and guest memory limits are unchanged.
+rejected. The content imports add no guest memory.
 
 Every module defines and exports exactly one unshared, 32-bit memory with an
 explicit maximum at or below 32 MiB. Module size is at most 1 MiB. Luau bundled
