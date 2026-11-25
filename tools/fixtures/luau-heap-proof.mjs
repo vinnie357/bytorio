@@ -1,9 +1,9 @@
 import { readFile } from "node:fs/promises";
 import { loadSource } from "../../runtime/odin/web/policy.js";
 
-export function heapGameSource({ growing = false } = {}) {
+export function heapGameSource({ growing = false, retainRooms = false } = {}) {
   return `
-local live = {}
+local live = ${retainRooms ? "{ rooms }" : "{}"}
 local ticks = 0
 local checksum = 0
 local game = {}

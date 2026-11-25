@@ -116,17 +116,31 @@ for (const [setting, argument] of [
   });
 }
 
-test("cartridge specification documents an 8 MiB tracked Luau heap", async () => {
-  const text = (await readFile(resolve(repo, "docs/cartridge-spec.md"), "utf8")).replace(
-    /\s+/g,
-    " ",
-  );
-  assert.ok(/8 MiB tracked Luau heap/.test(text), "missing 8 MiB tracked Luau heap statement");
-  assert.ok(
-    !/(?:4 MiB tracked Luau heap|tracked allocator limit is 4 MiB)/.test(text),
-    "cartridge specification must no longer state a 4 MiB tracked Luau heap",
-  );
-});
+for (const path of ["docs/cartridge-spec.md", "sdk/resources.md", "sdk/graphics.md"]) {
+  test(`${path} documents 32 MiB guest memory and an 8 MiB tracked Luau heap`, async () => {
+    const text = (await readFile(resolve(repo, path), "utf8")).replace(/\s+/g, " ");
+    assert.ok(
+      /(?:explicit maximum at or below 32 MiB|guest memory(?: remains capped at)? 32 MiB)/i.test(
+        text,
+      ),
+      `${path}: missing 32 MiB guest memory statement`,
+    );
+    assert.ok(
+      /(?:8 MiB tracked Luau heap|tracked Luau heap(?: at)? 8 MiB)/.test(text),
+      `${path}: missing 8 MiB tracked Luau heap statement`,
+    );
+    assert.ok(
+      !/guest memory(?: remains capped at)? 8 MiB/i.test(text),
+      `${path}: stale 8 MiB guest limit`,
+    );
+    assert.ok(
+      !/(?:4 MiB tracked Luau heap|tracked allocator limit is 4 MiB|tracked Luau heap(?: at)? 4 MiB)/.test(
+        text,
+      ),
+      `${path}: stale 4 MiB tracked Luau heap`,
+    );
+  });
+}
 
 test(
   "real executor retains about 2.5 MB and survives 400 allocation-churn ticks",
@@ -195,6 +209,45 @@ test(
     assert.match(failure.message, /not enough memory|out of memory/i);
     console.log(
       `Luau growing heap: ${failure.message}, tick ${ticks + 1}, peak ${game.game_heap_peak()}/${contract.limits.luauHeapBytes} bytes`,
+    );
+  },
+);
+
+test(
+  "exactly 524288 source bytes can grow to heap OOM within the guest memory budget",
+  { timeout: 10000 },
+  async () => {
+    const code = Buffer.from(
+      gameSource(limit - 8192, heapGameSource({ growing: true, retainRooms: true })),
+    );
+    assert.ok(code.length <= limit, `${code.length} generated source bytes before padding`);
+    const source = Buffer.alloc(limit, 0x20);
+    code.copy(source);
+    assert.equal(source.length, 524288);
+    const game = await heapExecutor(source);
+    assert.doesNotThrow(() => game.game_init(), "maximum-source init must not trap");
+    checkExecutor(game);
+    let failure;
+    let memoryPeak = game.memory.buffer.byteLength;
+    for (let tick = 1; tick <= 256; tick++) {
+      assert.doesNotThrow(
+        () => game.game_update(0, 0, 0, 0),
+        `maximum-source growth tick ${tick} must not trap`,
+      );
+      memoryPeak = Math.max(memoryPeak, game.memory.buffer.byteLength);
+      assert.ok(memoryPeak <= contract.limits.guestMemoryBytes, `${memoryPeak} guest memory bytes`);
+      assert.ok(game.game_heap_peak() <= contract.limits.luauHeapBytes);
+      try {
+        checkExecutor(game);
+      } catch (error) {
+        failure = error;
+        break;
+      }
+    }
+    assert.ok(failure, "maximum-source game must exhaust the tracked heap within 256 ticks");
+    assert.match(failure.message, /not enough memory/i);
+    console.log(
+      `Luau maximum-source OOM: ${source.length} source bytes, ${game.game_heap_peak()} heap peak bytes, ${memoryPeak} guest memory bytes; ${failure.message}`,
     );
   },
 );
