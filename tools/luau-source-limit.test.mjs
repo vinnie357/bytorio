@@ -6,18 +6,124 @@ import test from "node:test";
 import { decodeCartridge } from "../runtime/odin/web/cartridge.js";
 import {
   checkExecutor,
+  inspectGuest,
   loadSource,
   rasterizeDrawing,
   submitDrawing,
 } from "../runtime/odin/web/policy.js";
 import { gameSource } from "./fixtures/luau-source.mjs";
 import { packSource, sourceCode, sourcePng } from "./fixtures/luau-source-cartridge.mjs";
+import { sourceProof } from "./fixtures/luau-source-proof.mjs";
+import { declaredMemoryMaximum, moduleWithMemory } from "./fixtures/wasm-memory.mjs";
 import { bundleLuau } from "./sdk/bundle.mjs";
 import { nativePlayer } from "./toolchain.mjs";
 
 const limit = 524288;
 const oldLimit = 262144;
+const guestMemoryLimit = 33554432;
+const wasmPageBytes = 65536;
 const repo = resolve(import.meta.dirname, "..");
+const contract = JSON.parse(await readFile(resolve(repo, "sdk/contract.json")));
+
+test("contract allows 32 MiB of guest memory", () => {
+  assert.equal(contract.limits.guestMemoryBytes, guestMemoryLimit);
+});
+
+test("contract keeps the tracked Luau heap at 4 MiB", () => {
+  assert.equal(contract.limits.luauHeapBytes, 4194304);
+});
+
+function memoryDeclarations(value, path = "") {
+  return Object.entries(value).flatMap(([key, child]) => {
+    const name = path ? `${path}.${key}` : key;
+    if (key === "guestMemoryBytes") {
+      return [[name, child]];
+    }
+    return child && typeof child === "object" ? memoryDeclarations(child, name) : [];
+  });
+}
+
+for (const name of (await readdir(resolve(repo, "sdk/profiles")))
+  .filter((name) => name.endsWith(".json"))
+  .sort()) {
+  const profile = JSON.parse(await readFile(resolve(repo, "sdk/profiles", name)));
+  for (const [path, value] of memoryDeclarations(profile)) {
+    test(`${name} ${path} allows 32 MiB of guest memory`, () => {
+      assert.equal(value, guestMemoryLimit, `${name}: ${path}`);
+    });
+  }
+}
+
+for (const [path, declaration] of [
+  ["runtime/odin/web/constants.js", /export const MAX_MEMORY_BYTES = (\d+);/],
+  ["runtime/odin/abi/constants.odin", /MAX_MEMORY_BYTES :: (\d+)/],
+  ["sdk/luau/constants.luau", /MAX_MEMORY_BYTES = (\d+),/],
+  ["experiments/luau-executor/console_constants.h", /constexpr auto MAX_MEMORY_BYTES = (\d+)u;/],
+]) {
+  test(`${path} generates a 32 MiB guest memory limit`, async () => {
+    const match = declaration.exec(await readFile(resolve(repo, path), "utf8"));
+    assert.ok(match, `missing MAX_MEMORY_BYTES declaration in ${path}`);
+    assert.equal(Number(match[1]), guestMemoryLimit, path);
+  });
+}
+
+test("executor CMake maximum memory is 32 MiB", async () => {
+  const source = await readFile(resolve(repo, "experiments/luau-executor/CMakeLists.txt"), "utf8");
+  const match = /-sMAXIMUM_MEMORY=(\d+)\b/.exec(source);
+  assert.ok(match, "missing executor maximum memory setting");
+  assert.equal(Number(match[1]), guestMemoryLimit);
+});
+
+test("built executor declares an exported memory maximum of 32 MiB", async () => {
+  const bytes = await readFile(resolve(repo, "build/luau-executor/luau-executor.wasm"));
+  assert.equal(declaredMemoryMaximum(bytes), guestMemoryLimit);
+});
+
+test("inspectGuest accepts the existing 8 MiB memory declaration", () => {
+  assert.ok(inspectGuest(moduleWithMemory(128)) instanceof WebAssembly.Module);
+});
+
+test("inspectGuest accepts a 32 MiB memory maximum", () => {
+  assert.ok(
+    inspectGuest(moduleWithMemory(guestMemoryLimit / wasmPageBytes)) instanceof WebAssembly.Module,
+  );
+});
+
+test("inspectGuest rejects a memory maximum one page over 32 MiB", () => {
+  assert.throws(
+    () => inspectGuest(moduleWithMemory(guestMemoryLimit / wasmPageBytes + 1)),
+    /memory.*maximum/i,
+  );
+});
+
+test("cartridge specification documents a 32 MiB guest memory maximum", async () => {
+  const text = (await readFile(resolve(repo, "docs/cartridge-spec.md"), "utf8")).replace(
+    /\s+/g,
+    " ",
+  );
+  const maximum = /explicit maximum at or below (\d+) MiB/.exec(text);
+  assert.ok(maximum, "missing guest memory maximum statement");
+  assert.equal(Number(maximum[1]), 32, maximum[0]);
+  assert.doesNotMatch(text, /(?:maximum at or below|inside the) 8 MiB/);
+});
+
+for (const minimumBytes of [500000, 520000]) {
+  test(`executor initializes at least ${minimumBytes} source bytes within the memory and heap budgets`, async () => {
+    const bytes = await readFile(resolve(repo, "build/luau-executor/luau-executor.wasm"));
+    const names = [
+      "content_size",
+      "content_read",
+      "save_size",
+      "save_status",
+      "save_read",
+      "save_write",
+      "text_configure",
+      "text_read",
+    ];
+    const imports = { env: Object.fromEntries(names.map((name) => [name, () => 0])) };
+    console.log(await sourceProof(bytes, imports, contract, minimumBytes));
+  });
+}
 
 for (const [name, value] of [
   [

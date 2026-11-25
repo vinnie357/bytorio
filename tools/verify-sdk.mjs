@@ -8,7 +8,7 @@ import { chromium } from "./browser-timing.mjs";
 import { createProject, buildProject, checkProject, nativeExport } from "./sdk/project.mjs";
 import { bundleLuau } from "./sdk/bundle.mjs";
 import { graphicsPacket } from "./sdk/assets.mjs";
-import { gameSource } from "./fixtures/luau-source.mjs";
+import { sourceProof } from "./fixtures/luau-source-proof.mjs";
 import { serve } from "./serve.mjs";
 import { nativePlayer, tool, run } from "./toolchain.mjs";
 import {
@@ -321,28 +321,9 @@ try {
 }
 // SDK error behavior, caught independently of rendering and reset on reload.
 const luau = await pair("luau");
-{
-  const source = Buffer.from(gameSource(500000));
-  assert.ok(source.length >= 500000 && source.length <= 524288, `${source.length} source bytes`);
+for (const minimumBytes of [500000, 520000]) {
   const bytes = await readFile(resolve(paths.luau, "build/web/luau-executor.wasm"));
-  const game = (await WebAssembly.instantiate(bytes, imports)).instance.exports;
-  game._initialize?.();
-  assert.ok(
-    game.game_source_capacity() >= 524288,
-    `executor source capacity ${game.game_source_capacity()} must be at least 524288`,
-  );
-  loadSource(game, source);
-  const started = performance.now();
-  game.game_init();
-  const duration = performance.now() - started;
-  checkExecutor(game);
-  const heapPeak = game.game_heap_peak();
-  const memoryBytes = game.memory.buffer.byteLength;
-  assert.ok(heapPeak > 0 && heapPeak <= contract.limits.luauHeapBytes, `${heapPeak} heap bytes`);
-  assert.ok(memoryBytes <= contract.limits.guestMemoryBytes, `${memoryBytes} guest memory bytes`);
-  console.log(
-    `Luau source proof: ${source.length} source bytes, ${heapPeak} heap peak bytes, ${memoryBytes} guest memory bytes, game_init ${duration.toFixed(2)} ms`,
-  );
+  console.log(await sourceProof(bytes, imports, contract, minimumBytes));
 }
 // Getter calls may grow memory after draw; the submitted frame must be a snapshot.
 const growing = new WebAssembly.Memory({ initial: 1, maximum: 2 });
