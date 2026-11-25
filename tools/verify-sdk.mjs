@@ -8,6 +8,7 @@ import { chromium } from "./browser-timing.mjs";
 import { createProject, buildProject, checkProject, nativeExport } from "./sdk/project.mjs";
 import { bundleLuau } from "./sdk/bundle.mjs";
 import { graphicsPacket } from "./sdk/assets.mjs";
+import { sourceProof } from "./fixtures/luau-source-proof.mjs";
 import { serve } from "./serve.mjs";
 import { nativePlayer, tool, run } from "./toolchain.mjs";
 import {
@@ -320,6 +321,10 @@ try {
 }
 // SDK error behavior, caught independently of rendering and reset on reload.
 const luau = await pair("luau");
+for (const minimumBytes of [500000, 520000, 524288]) {
+  const bytes = await readFile(resolve(paths.luau, "build/web/luau-executor.wasm"));
+  console.log(await sourceProof(bytes, imports, contract, minimumBytes));
+}
 // Getter calls may grow memory after draw; the submitted frame must be a snapshot.
 const growing = new WebAssembly.Memory({ initial: 1, maximum: 2 });
 const frameView = new DataView(growing.buffer);

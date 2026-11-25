@@ -1,6 +1,7 @@
 import {
   FRAME_BYTES,
   MAX_GAME_BYTES,
+  MAX_LUAU_SOURCE_BYTES,
   MAX_MEMORY_BYTES,
   WASM_PAGE_BYTES,
   resourceSchema,
@@ -344,7 +345,9 @@ export function inspectGuest(bytes, compiledModule) {
         initial = leb(end),
         maximum = flags === 1 ? leb(end) : Infinity;
       if (flags !== 1 || initial > maximum || maximum > MAX_PAGES) {
-        throw new Error("Game memory must declare an 8 MiB maximum or less.");
+        throw new Error(
+          `Game memory must declare a ${MAX_MEMORY_BYTES / (1024 * 1024)} MiB maximum or less.`,
+        );
       }
       if (cursor !== end) {
         throw new Error("Invalid memory declaration.");
@@ -443,7 +446,7 @@ export function loadSource(game, source) {
   const bytes = new Uint8Array(source);
   if (
     !bytes.length ||
-    bytes.length > 256 * 1024 ||
+    bytes.length > MAX_LUAU_SOURCE_BYTES ||
     typeof game.game_source_buffer !== "function" ||
     typeof game.game_source_capacity !== "function" ||
     typeof game.game_source_size !== "function"

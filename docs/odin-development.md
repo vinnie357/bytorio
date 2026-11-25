@@ -78,7 +78,7 @@ Required exports:
 - `game_init()`.
 - `game_update(buttons: u32, pointer: u32, x: f64, y: f64)`; each call is one 60 Hz tick.
 - `game_draw() -> u32`, returning an offset to the frame record.
-- `memory`, an unshared wasm32 memory with an explicit maximum of at most 8 MiB.
+- `memory`, an unshared wasm32 memory with an explicit maximum of at most 32 MiB.
 
 The one allowed function import is `env.sin(f64) -> f64`, because Odin's freestanding math implementation lowers sine to that import. Native supplies it through a named Wasmtime linker callback and web supplies `Math.sin`. It grants no filesystem/network capability. Unknown imports fail. The measured example matches on both hosts, but host math is not a universal determinism guarantee.
 

@@ -36,9 +36,9 @@
   },
   "limits": {
     "moduleBytes": 1048576,
-    "guestMemoryBytes": 8388608,
-    "luauSourceBytes": 262144,
-    "luauHeapBytes": 4194304,
+    "guestMemoryBytes": 33554432,
+    "luauSourceBytes": 524288,
+    "luauHeapBytes": 8388608,
     "commands": 16384,
     "textBytes": 16384,
     "textBytesPerCommand": 1024,

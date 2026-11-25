@@ -138,16 +138,69 @@ try {
       );
       const action = frame.locator('[data-code="Space"]');
       await direction.scrollIntoViewIfNeeded();
+      await action.scrollIntoViewIfNeeded();
       const d = await direction.boundingBox();
       const a = await action.boundingBox();
+      const viewport = mobile.viewportSize();
+      const [directionPoint, actionPoint] = [
+        { name: "direction", box: d, id: 1 },
+        { name: "action", box: a, id: 2 },
+      ].map(({ name, box, id }) => {
+        assert.ok(box, `${game.id}/${language}: ${name} touch key has no bounding box`);
+        const point = { x: box.x + box.width / 2, y: box.y + box.height / 2, id };
+        assert.ok(
+          point.x >= 0 && point.x < viewport.width && point.y >= 0 && point.y < viewport.height,
+          `${game.id}/${language}: ${name} touch point ${JSON.stringify(point)} must be inside viewport ${JSON.stringify(viewport)}; box ${JSON.stringify(box)}`,
+        );
+        return point;
+      });
+      await frame.evaluate(() => {
+        globalThis.touchPointerEvents = [];
+        for (const type of ["pointerdown", "pointerup", "pointercancel", "lostpointercapture"]) {
+          document.addEventListener(
+            type,
+            (event) => {
+              globalThis.touchPointerEvents.push({
+                type: event.type,
+                pointerId: event.pointerId,
+                targetCode: event.target?.closest?.("[data-code]")?.dataset.code ?? null,
+              });
+            },
+            true,
+          );
+        }
+      });
+      const waitForTouchKeys = async (expected) => {
+        try {
+          await frame.waitForFunction(
+            (count) => document.querySelectorAll(".touch-key.pressed").length === count,
+            expected,
+          );
+        } catch (error) {
+          if (error.name !== "TimeoutError") {
+            throw error;
+          }
+          const diagnostics = await frame.evaluate(() => ({
+            events: globalThis.touchPointerEvents,
+            pressed: document.querySelectorAll(".touch-key.pressed").length,
+          }));
+          throw new Error(
+            `${game.id}/${language}: waiting for ${expected} pressed touch keys: ${JSON.stringify({
+              ...diagnostics,
+              directionBox: d,
+              actionBox: a,
+              viewport,
+            })}`,
+            { cause: error },
+          );
+        }
+      };
       const session = await context.newCDPSession(mobile);
       await session.send("Input.dispatchTouchEvent", {
         type: "touchStart",
-        touchPoints: [{ x: d.x + d.width / 2, y: d.y + d.height / 2, id: 1 }],
+        touchPoints: [directionPoint],
       });
-      await frame.waitForFunction(
-        () => document.querySelectorAll(".touch-key.pressed").length === 1,
-      );
+      await waitForTouchKeys(1);
       await frame.waitForFunction(
         (tick) => globalThis.playerStatus.ticks > tick + 25,
         initial.ticks,
@@ -168,16 +221,13 @@ try {
           "Touch direction moves the RPG sprite away from its spawn tile",
         );
       }
+      await session.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+      await waitForTouchKeys(0);
       await session.send("Input.dispatchTouchEvent", {
         type: "touchStart",
-        touchPoints: [
-          { x: d.x + d.width / 2, y: d.y + d.height / 2, id: 1 },
-          { x: a.x + a.width / 2, y: a.y + a.height / 2, id: 2 },
-        ],
+        touchPoints: [directionPoint, actionPoint],
       });
-      await frame.waitForFunction(
-        () => document.querySelectorAll(".touch-key.pressed").length === 2,
-      );
+      await waitForTouchKeys(2);
       await session.send("Input.dispatchTouchEvent", { type: "touchCancel", touchPoints: [] });
       assert.equal(
         await frame.locator(".touch-key.pressed").count(),

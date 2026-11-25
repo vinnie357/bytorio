@@ -7,6 +7,12 @@ import { test } from "node:test";
 import { runStep, sourceState, validate } from "./validation-runner.mjs";
 import { timedSpawnSync } from "./command-timing.mjs";
 
+function checkedNodeArgs(args) {
+  const length = [process.execPath, ...args].join(" ").length;
+  assert.ok(length < 32767, `Windows command-line limit is 32,767 characters; received ${length}.`);
+  return args;
+}
+
 test("command timings retain failed status and original output", async () => {
   const cwd = await mkdtemp(join(tmpdir(), "validation-timing-"));
   const destination = join(cwd, "commands.jsonl");
@@ -15,7 +21,7 @@ test("command timings retain failed status and original output", async () => {
     process.env.VALIDATION_COMMAND_TIMINGS = destination;
     const result = timedSpawnSync(
       process.execPath,
-      ["-e", "console.log('output'); process.exitCode = 8"],
+      checkedNodeArgs(["-e", "console.log('output'); process.exitCode = 8"]),
       { encoding: "utf8" },
     );
     assert.equal(result.status, 8);
@@ -38,7 +44,7 @@ test("retains large output and preserves a failure after output", async () => {
   const log = join(cwd, "output.log");
   const result = await runStep({
     executable: process.execPath,
-    args: ["-e", "console.log('x'.repeat(100000)); process.exitCode = 7"],
+    args: checkedNodeArgs(["-e", "console.log('x'.repeat(100000)); process.exitCode = 7"]),
     cwd,
     log,
     timeoutMs: 10000,
@@ -59,7 +65,7 @@ test("reports launch failure and bounds a hung command", async () => {
   assert.equal(missing.exitCode, 127);
   const hung = await runStep({
     executable: process.execPath,
-    args: ["-e", "setInterval(() => {}, 1000)"],
+    args: checkedNodeArgs(["-e", "setInterval(() => {}, 1000)"]),
     cwd,
     log: join(cwd, "hung.log"),
     timeoutMs: 100,
@@ -101,7 +107,7 @@ test("interrupts the active command and removes signal handlers", async () => {
   const listeners = process.listenerCount("SIGINT");
   const pending = runStep({
     executable: process.execPath,
-    args: ["-e", "setInterval(() => {}, 1000)"],
+    args: checkedNodeArgs(["-e", "setInterval(() => {}, 1000)"]),
     cwd,
     log: join(cwd, "interrupted.log"),
     timeoutMs: 10000,
@@ -137,7 +143,11 @@ test("stops on failure and rejects results from changing sources", async () => {
     ...options,
     execute: async (step) => {
       visited.push(step.args.at(-1));
-      return runStep({ ...step, executable: process.execPath, args: ["-e", "process.exit(9)"] });
+      return runStep({
+        ...step,
+        executable: process.execPath,
+        args: checkedNodeArgs(["-e", "process.exit(9)"]),
+      });
     },
   });
   assert.equal(failed.status, "failed");
@@ -175,7 +185,7 @@ test("stops on failure and rejects results from changing sources", async () => {
       return runStep({
         ...step,
         executable: process.execPath,
-        args: ["-e", "console.log('passed')"],
+        args: checkedNodeArgs(["-e", "console.log('passed')"]),
       });
     },
   });

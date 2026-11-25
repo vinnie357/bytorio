@@ -426,7 +426,7 @@ time or physical device latency on arbitrary hardware.
 
 | Item | Profile limit |
 | --- | --- |
-| Game memory / tracked Luau heap | Retain 8 MiB / 4 MiB; staging fits inside those limits |
+| Game memory / tracked Luau heap | 32 MiB / 8 MiB; staging fits inside those limits |
 | Live runtime resource IDs | 1,024, plus reserved screen/default resources |
 | Runtime resource budget | 64 MiB, charging persistent copies, retired versions, queued payloads and DSP history |
 | Packet staging | 16,384 commands, 1 MiB payload per commit; larger uploads require chunks |
