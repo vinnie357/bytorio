@@ -14,7 +14,7 @@
     "status": "experimental"
   },
   "targets": {
-    "guestMemoryBytes": 8388608,
+    "guestMemoryBytes": 33554432,
     "luauHeapBytes": 4194304,
     "resourceSlots": 1024,
     "runtimeResourceBytes": 67108864,

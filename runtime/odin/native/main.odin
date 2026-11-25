@@ -469,7 +469,7 @@ run :: proc() -> int {
         }
     } else if source_path != "" {
         source_error: string
-        source_owned, source_error = read_bounded(source_path, 256 * 1024)
+        source_owned, source_error = read_bounded(source_path, abi.MAX_LUAU_SOURCE_BYTES)
         if source_error != "" {
 
             return error(source_error)

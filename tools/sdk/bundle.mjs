@@ -1,7 +1,11 @@
 import { readFile, realpath, stat } from "node:fs/promises";
 import { resolve, dirname, relative, sep } from "node:path";
 import { formatSource } from "../code-tools.mjs";
-import { PROFILE_ALPHA_3D, PROFILE_OGG } from "../../runtime/odin/web/constants.js";
+import {
+  MAX_LUAU_SOURCE_BYTES,
+  PROFILE_ALPHA_3D,
+  PROFILE_OGG,
+} from "../../runtime/odin/web/constants.js";
 
 const contract = JSON.parse(await readFile(new URL("../../sdk/contract.json", import.meta.url)));
 
@@ -245,7 +249,7 @@ export async function bundleLuau({
     }
     visiting.add(id);
     const source = await readFile(file, "utf8");
-    if (Buffer.byteLength(source) > 256 * 1024 || modules.size + visiting.size > 256) {
+    if (Buffer.byteLength(source) > MAX_LUAU_SOURCE_BYTES || modules.size + visiting.size > 256) {
       throw new Error("Luau module graph exceeds preview limits");
     }
     const lex = tokens(source),
@@ -305,8 +309,10 @@ export async function bundleLuau({
       (strip ? stripComments(formatted) : formatted),
     "utf8",
   );
-  if (bytes.length > 256 * 1024) {
-    throw new Error(`Bundled Luau source exceeds 256 KiB (${bytes.length} bytes)`);
+  if (bytes.length > MAX_LUAU_SOURCE_BYTES) {
+    throw new Error(
+      `Bundled Luau source exceeds ${MAX_LUAU_SOURCE_BYTES / 1024} KiB (${bytes.length} bytes)`,
+    );
   }
   return bytes;
 }

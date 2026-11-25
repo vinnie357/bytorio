@@ -42,8 +42,13 @@ Odin modules import them only when using the content SDK. Arbitrary imports are
 rejected, and guest memory limits are unchanged.
 
 Every module defines and exports exactly one unshared, 32-bit memory with an
-explicit maximum at or below 8 MiB. Module size is at most 1 MiB. Luau bundled
-source is at most 256 KiB; its tracked allocator limit is 4 MiB within guest memory.
+explicit maximum at or below 32 MiB. Module size is at most 1 MiB. Luau bundled
+source is at most 512 KiB; its tracked allocator limit is 4 MiB within guest memory.
+The executor reserves a static source buffer of this size inside the 32 MiB guest
+memory; compilation runs in guest memory, and the loaded program counts against
+the 4 MiB tracked Luau heap.
+Compiling a 512 KiB source inside guest memory can peak near 20 MiB, which requires
+the larger guest memory maximum.
 These are preview limits, independent of the planned 128/512 MB ROM sizes.
 
 SDK version words encode `major << 16 | minor << 8 | patch`; 0.1.0 is 256.

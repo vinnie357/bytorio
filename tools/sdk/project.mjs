@@ -7,6 +7,7 @@ import { createHash } from "node:crypto";
 import { readGraphics } from "./assets.mjs";
 import { bundleLuau, odinEntry } from "./bundle.mjs";
 import { inspectGuest } from "../../runtime/odin/web/policy.js";
+import { MAX_MEMORY_BYTES } from "../../runtime/odin/web/constants.js";
 import { encodeCartridge, encodeSaveIdentity } from "./cartridge.mjs";
 import { decodeCartridge } from "../../runtime/odin/web/cartridge.js";
 import { formatSource } from "../code-tools.mjs";
@@ -204,7 +205,7 @@ async function prepare(path) {
       "-source-code-locations:filename",
       `-collection:sdk=${resolve(repo, "sdk/odin")}`,
       `-out:${resolve(generated, "game.wasm")}`,
-      "-extra-linker-flags:--max-memory=8388608",
+      `-extra-linker-flags:--max-memory=${MAX_MEMORY_BYTES}`,
     ]);
     const bytes = await readFile(resolve(generated, "game.wasm"));
     inspectGuest(bytes);

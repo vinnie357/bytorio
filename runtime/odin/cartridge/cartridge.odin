@@ -69,7 +69,7 @@ parse_payload :: proc(b: []u8) -> (cart: Cartridge, error: string) {
     limit := u64(abi.MAX_GAME_BYTES)
     if cart.language == LUAU {
 
-        limit = 256 * 1024
+        limit = u64(abi.MAX_LUAU_SOURCE_BYTES)
     }
     if title_size < 1 ||
        title_size > 128 ||
