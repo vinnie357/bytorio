@@ -21,6 +21,7 @@ poisoning_allocator :: proc(
 }
 
 poisoning_allocator_destroy :: proc(state: ^Poisoning_Allocator) {
+    assert(len(state.allocations) == 0, "poisoning allocator has outstanding allocations")
     delete(state.allocations)
 }
 
@@ -54,7 +55,7 @@ poisoning_allocator_proc :: proc(
     case .Free:
         if old_memory == nil { return nil, nil }
         allocation, tracked := state.allocations[old_memory]
-        if !tracked { return nil, .Invalid_Pointer }
+        if !tracked { panic("poisoning allocator cannot free an untracked allocation") }
         mem.set(old_memory, 0xA5, allocation.size)
         block, err := state.backing.procedure(
             state.backing.data,

@@ -40,11 +40,13 @@ simulation_clock_anchors_start_and_resume :: proc(test: ^testing.T) {
             testing.expect(test, resource.ack(u32(tick + 1)))
         }
         consumer := registry.audio
+        defer {
+            if consumer != registry.audio { mixer.close(consumer) }
+        }
         packet := make([]u8, w.maxAudioPacketBytes)
         defer delete(packet)
         if serialized {
             consumer = mixer.create()
-            defer mixer.close(consumer)
             if !transfer_audio_batches(test, registry.audio, consumer, packet) { return }
         }
         lead: [w.audioLeadFrames * 2]f32
@@ -119,11 +121,13 @@ lead_tracks_delivered_clock_without_rewinding_or_skipping_audible_pcm :: proc(te
         producer.batches[0].simulation_frame = 43200
         producer.batches[0].commands[0].at = 43200
         consumer := producer
+        defer {
+            if consumer != producer { mixer.close(consumer) }
+        }
         packet := make([]u8, w.maxAudioPacketBytes)
         defer delete(packet)
         if serialized {
             consumer = mixer.create()
-            defer mixer.close(consumer)
             if !transfer_audio_batches(test, producer, consumer, packet) { return }
         } else {
             consumer.lead_remaining = w.audioLeadFrames
